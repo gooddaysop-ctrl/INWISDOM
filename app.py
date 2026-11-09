@@ -155,7 +155,7 @@ else:
             logo_base64 = ""
             if os.path.exists("logo.png"):
                 with open("logo.png", "rb") as f:
-                    logo_base64 = base64.b64encode(f.read()).decode()[cite: 1]
+                    logo_base64 = base64.b64encode(f.read()).decode()
             
             if logo_base64:
                 # 로고 클릭 시 새로고침 동작 추가
@@ -166,7 +166,7 @@ else:
                             <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
                         </div>
                     </a>
-                """, unsafe_allow_html=True)[cite: 1]
+                """, unsafe_allow_html=True)
             else:
                 st.markdown(f"""
                     <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
@@ -178,7 +178,7 @@ else:
             search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
             
         with header_col3:
-            # 보기 싫었던 새로고침 버튼 삭제 후 나눔하기 버튼만 유지
+            # 새로고침 버튼 삭제 후 나눔하기 버튼만 유지
             if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
                 st.session_state.show_add_form = not st.session_state.show_add_form
 
