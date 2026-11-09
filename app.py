@@ -8,36 +8,45 @@ import uuid
 # --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
 
-# --- CSS 스타일 적용 (상단 바 고정 및 기본 헤더 숨김) ---
+# --- CSS 스타일 적용 (상단 바 완벽 고정) ---
 st.markdown("""
     <style>
-    /* Streamlit 기본 상단 헤더 숨김 */
+    /* 기본 헤더 숨김 */
     header[data-testid="stHeader"] {
-        display: none;
+        display: none !important;
     }
     
     .stApp { background-color: #F9FAFB; }
     
-    /* 커스텀 헤더 고정 */
-    div[data-testid="stVerticalBlock"]:has(#header-anchor) {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        background-color: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(5px);
-        padding: 15px 20px;
-        border-bottom: 2px solid #E5E7EB;
-        border-radius: 0 0 12px 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        margin-top: 0px; /* 여백 조정 */
-        margin-bottom: 20px;
+    /* 본문이 고정 헤더에 가려지지 않도록 상단 여백 확보 */
+    .main .block-container {
+        padding-top: 120px !important;
     }
     
+    /* 커스텀 헤더 최상단 강제 고정 (스크롤 시 안 없어짐) */
+    div[data-testid="stVerticalBlock"]:has(#header-anchor) {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 99999;
+        background-color: rgba(255, 255, 255, 0.98);
+        padding: 15px 3rem 15px 3rem;
+        border-bottom: 2px solid #E5E7EB;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* 물품 카드 디자인 */
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
         border-radius: 12px;
         background-color: white;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         border: 1px solid #F3F4F6;
+    }
+    
+    /* 로고 마우스오버 효과 */
+    .logo-container:hover {
+        opacity: 0.8;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -72,7 +81,7 @@ if 'show_add_form' not in st.session_state:
 if 'reserving_item_id' not in st.session_state:
     st.session_state.reserving_item_id = None
 
-# --- 자동 로그인(세션 토큰) 검증 및 만료 처리 ---
+# --- 자동 로그인(세션 토큰) 검증 ---
 now = datetime.datetime.now()
 valid_sessions = {}
 for token, info in st.session_state.db.get('sessions', {}).items():
@@ -136,47 +145,57 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 상단 UI (스크롤 시 고정) ---
+    # --- 상단 UI (강제 고정 영역) ---
     header_container = st.container()
     with header_container:
         st.markdown("<div id='header-anchor'></div>", unsafe_allow_html=True)
         header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
+        
         with header_col1:
-            # 로고 이미지 로드 및 렌더링
             logo_base64 = ""
             if os.path.exists("logo.png"):
                 with open("logo.png", "rb") as f:
-                    logo_base64 = base64.b64encode(f.read()).decode()
+                    logo_base64 = base64.b64encode(f.read()).decode()[cite: 1]
             
             if logo_base64:
+                # 로고 클릭 시 새로고침 동작 추가
                 st.markdown(f"""
-                    <div style='display: flex; align-items: center; margin: 0;'>
-                        <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
-                        <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
-                    </div>
-                """, unsafe_allow_html=True)
+                    <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
+                        <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px; cursor: pointer;'>
+                            <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
+                            <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                        </div>
+                    </a>
+                """, unsafe_allow_html=True)[cite: 1]
             else:
-                st.markdown(f"<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>", unsafe_allow_html=True)
+                st.markdown(f"""
+                    <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
+                        <h3 class="logo-container" style='margin:0; padding-top:5px; color: #1E3A8A; cursor: pointer;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                    </a>
+                """, unsafe_allow_html=True)
                 
         with header_col2:
             search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
+            
         with header_col3:
+            # 보기 싫었던 새로고침 버튼 삭제 후 나눔하기 버튼만 유지
             if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
                 st.session_state.show_add_form = not st.session_state.show_add_form
 
-    # --- 가톨릭대 사진 (Fade-out) ---
+    # --- 가톨릭대 배경 사진 ---
     image_path = "image_0f5c52.jpg"
     if os.path.exists(image_path):
         with open(image_path, "rb") as f:
             img_base64 = base64.b64encode(f.read()).decode()
         st.markdown(f"""
             <div style="
-                width: 100%; height: 450px; 
+                width: 100%; height: 350px; 
                 background-image: url('data:image/jpeg;base64,{img_base64}'); 
                 background-size: cover; background-position: center; 
-                -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 100%);
-                mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 100%);
+                -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+                mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
                 margin-bottom: 20px;
+                border-radius: 12px;
             "></div>
         """, unsafe_allow_html=True)
 
@@ -223,14 +242,14 @@ else:
                         st.session_state.show_add_form = False
                         st.rerun()
 
-    # --- 물품 리스트 필터링 ---
+    # --- 물품 리스트 ---
     display_items = [i for i in st.session_state.db['items'] if isinstance(i, dict) and i.get('dorm') == current_user_dorm]
     if search_query:
         display_items = [i for i in display_items if search_query.lower() in i.get('title', '').lower() or search_query.lower() in i.get('desc', '').lower()]
 
     st.markdown("#### 🎁 실시간 나눔 목록")
     if not display_items:
-        st.write("아직 올라온 물품이 없습니다.")
+        st.write("아직 올라온 물품이 없습니다. 상단의 '➕ 물품 나눔하기'를 눌러 첫 게시글을 올려보세요!")
     else:
         for i in range(0, len(display_items), 4):
             cols = st.columns(4)
@@ -259,8 +278,8 @@ else:
                             st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
                             st.caption(f"{item.get('category')} | {item.get('date')}")
                             
-                            # 수령 기능 로직
                             if status == 'available':
+                                # 타인이 올린 게시물일 경우: 수령하기 폼
                                 if item.get('uploader_id') != current_user_id:
                                     if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
                                         st.session_state.reserving_item_id = item['id']
@@ -291,10 +310,9 @@ else:
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
                                 
-                                # --- 작성자 본인일 경우 삭제 버튼 표시 ---
+                                # 본인이 올린 게시물일 경우: 삭제하기 버튼 표시
                                 else:
                                     if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
-                                        # 삭제 처리 후 데이터 저장 및 새로고침
                                         st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
                                         save_data(st.session_state.db)
                                         st.rerun()
@@ -302,8 +320,8 @@ else:
                             with st.expander("상세 보기"):
                                 st.write(f"📍 위치: {item.get('location', '')}")
                                 st.write(f"**설명:** {item.get('desc', '')}")
-                                st.write(f"**닉네임:** {item.get('nickname', '')}")
-                                st.write(f"**오픈채팅/연락처:** {item.get('contact', '')}")
+                                st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
+                                st.write(f"**연락처:** {item.get('contact', '')}")
 
     # --- 사이드바: 내 알림 센터 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
