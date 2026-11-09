@@ -5,25 +5,23 @@ import os
 import json
 import uuid
 
-# --- 페이지 설정 (사이드바 항상 펼치기 초기화 포함) ---
+# --- 페이지 설정 ---
 st.set_page_config(
     page_title="가톨릭대학교 기숙사 나눔장터", 
     layout="wide", 
     initial_sidebar_state="expanded"
 )
 
-# --- CSS 스타일 적용 (상단 바 고정 & 사이드바 항상 강제 노출) ---
+# --- CSS 스타일 적용 ---
 st.markdown("""
     <style>
     .stApp { background-color: #F9FAFB; }
     
-    /* 스트림릿 기본 헤더 및 여백 제거 */
     header[data-testid="stHeader"] { display: none !important; }
     .block-container { 
         padding-top: 100px !important; 
     }
     
-    /* 브라우저 최상단에 흰색 바 고정 (Fixed Header) */
     .fixed-top-bar {
         position: fixed !important;
         top: 0 !important;
@@ -37,7 +35,6 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
     
-    /* 사이드바 강제 고정 및 항상 보이게 설정 */
     section[data-testid="stSidebar"] {
         width: 280px !important;
         min-width: 280px !important;
@@ -314,7 +311,7 @@ else:
                                 st.write(f"**닉네임:** {item.get('nickname', '')}")
                                 st.write(f"**오픈채팅/연락처:** {item.get('contact', '')}")
 
-    # --- 사이드바: 내 알림 센터 (항상 노출됨) ---
+    # --- 사이드바: 내 알림 센터 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
     st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
     st.sidebar.divider()
@@ -342,4 +339,12 @@ else:
         st.sidebar.caption("새로운 수령 예약 알림이 없습니다.")
     
     st.sidebar.divider()
-    if st.sidebar.button("로그
+    if st.sidebar.button("로그아웃"):
+        st.session_state.logged_in_user = None
+        if 'session' in st.query_params:
+            url_token = st.query_params['session']
+            if url_token in st.session_state.db.get('sessions', {}):
+                del st.session_state.db['sessions'][url_token]
+                save_data(st.session_state.db)
+            del st.query_params['session']
+        st.rerun()
