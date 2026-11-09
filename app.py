@@ -275,3 +275,87 @@ else:
                             if img_bg:
                                 st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:black; border-radius:8px; overflow:hidden;"><img src="{img_bg}" style="width:100%; height:100%; object-fit:cover; opacity:{opacity};">{overlay_html}</div>', unsafe_allow_html=True)
                             else:
+                                st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:#374151; border-radius:8px; overflow:hidden; display:flex; justify-content:center; align-items:center; color:#9CA3AF;"><div style="opacity:{opacity};">이미지 없음</div>{overlay_html}</div>', unsafe_allow_html=True)
+                            
+                            st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
+                            st.caption(f"{item.get('category')} | {item.get('date')}")
+                            
+                            if status == 'available':
+                                if item.get('uploader_id') != current_user_id:
+                                    if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
+                                        st.session_state.reserving_item_id = item['id']
+                                        st.rerun()
+                                    
+                                    if st.session_state.reserving_item_id == item['id']:
+                                        with st.container(border=True):
+                                            buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
+                                            buyer_contact = st.text_input("연락처", key=f"contact_{item['id']}")
+                                            
+                                            c1, c2 = st.columns(2)
+                                            with c1:
+                                                if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
+                                                    if buyer_sid and buyer_contact:
+                                                        for db_item in st.session_state.db['items']:
+                                                            if db_item['id'] == item['id']:
+                                                                db_item['status'] = 'reserved'
+                                                                db_item['buyer_sid'] = buyer_sid
+                                                                db_item['buyer_contact'] = buyer_contact
+                                                                break
+                                                        save_data(st.session_state.db)
+                                                        st.session_state.reserving_item_id = None
+                                                        st.rerun()
+                                                    else:
+                                                        st.warning("정보를 입력하세요.")
+                                            with c2:
+                                                if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
+                                                    st.session_state.reserving_item_id = None
+                                                    st.rerun()
+                                else:
+                                    if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
+                                        st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
+                                        save_data(st.session_state.db)
+                                        st.rerun()
+                            
+                            with st.expander("상세 보기"):
+                                st.write(f"📍 위치: {item.get('location', '')}")
+                                st.write(f"**설명:** {item.get('desc', '')}")
+                                st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
+                                st.write(f"**연락처:** {item.get('contact', '')}")
+
+    # --- 사이드바 ---
+    st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
+    st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
+    st.sidebar.divider()
+    
+    st.sidebar.markdown("### 🔔 내 물품 알림")
+    my_items = [i for i in st.session_state.db['items'] if i.get('uploader_id') == current_user_id]
+    has_notification = False
+    
+    for my_item in my_items:
+        if my_item.get('status') == 'reserved':
+            has_notification = True
+            with st.sidebar.container(border=True):
+                st.write(f"**{my_item['title']}** 예약 요청!")
+                st.caption(f"학번: {my_item['buyer_sid']}")
+                st.caption(f"연락처: {my_item['buyer_contact']}")
+                if st.button("✅ 수락 (수령 완료처리)", key=f"accept_{my_item['id']}", use_container_width=True):
+                    for db_item in st.session_state.db['items']:
+                        if db_item['id'] == my_item['id']:
+                            db_item['status'] = 'completed'
+                            break
+                    save_data(st.session_state.db)
+                    st.rerun()
+                    
+    if not has_notification:
+        st.sidebar.caption("새로운 수령 예약 알림이 없습니다.")
+    
+    st.sidebar.divider()
+    if st.sidebar.button("로그아웃"):
+        st.session_state.logged_in_user = None
+        if 'session' in st.query_params:
+            url_token = st.query_params['session']
+            if url_token in st.session_state.db.get('sessions', {}):
+                del st.session_state.db['sessions'][url_token]
+                save_data(st.session_state.db)
+            del st.query_params['session']
+        st.rerun()
