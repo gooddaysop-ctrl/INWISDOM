@@ -5,28 +5,26 @@ import os
 import json
 import uuid
 
-# --- 페이지 설정 (사이드바 기본 펼침) ---
+# --- 페이지 설정 (사이드바 기본 펼침으로 본문 자연스럽게 밀어내기) ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS 스타일 적용 (레이아웃 파괴 원인 제거, 사이드바 버튼 블랙 적용) ---
+# --- 최소화된 안전한 CSS ---
 st.markdown("""
     <style>
-    /* 우측 상단 Deploy 버튼과 메뉴만 숨기고, 좌측 사이드바 여는 버튼(햄버거)은 살려둠 */
+    /* 우측 상단 불필요한 기본 메뉴 숨김 */
     .stDeployButton { display: none !important; }
-    #MainMenu { visibility: hidden !important; }
+    #MainMenu { display: none !important; }
     
-    /* 전체 배경색 */
     .stApp { background-color: #F9FAFB; }
     
-    /* 🔥 사이드바 내부 버튼 디자인: 완전한 검은색 🔥 */
-    section[data-testid="stSidebar"] .stButton > button {
+    /* 🔥 사이드바 내부 버튼 검은색 적용 (레이아웃 파괴 없음) 🔥 */
+    [data-testid="stSidebar"] button {
         background-color: #000000 !important;
         color: #ffffff !important;
         border: 1px solid #000000 !important;
-        font-weight: bold;
-        transition: all 0.2s ease-in-out;
+        transition: all 0.2s;
     }
-    section[data-testid="stSidebar"] .stButton > button:hover {
+    [data-testid="stSidebar"] button:hover {
         background-color: #333333 !important;
         border-color: #333333 !important;
         color: #ffffff !important;
@@ -41,14 +39,6 @@ st.markdown("""
     }
     
     /* 로고 마우스오버 효과 */
-    .logo-container {
-        display: flex; 
-        align-items: center; 
-        margin: 0; 
-        padding-top: 5px; 
-        cursor: pointer;
-        transition: opacity 0.2s;
-    }
     .logo-container:hover {
         opacity: 0.7;
     }
@@ -58,7 +48,7 @@ st.markdown("""
 CATEGORIES = ["청소용품", "생활용품", "식품(미개봉)", "일회용품", "의류&잡화", "수납&정리용품", "학용품&책", "그 외 다른용품"]
 DORMS = ["안드레아관", "스테파노관"]
 
-# --- 💾 데이터베이스 로드 및 저장 ---
+# --- 데이터베이스 로드 및 저장 ---
 DATA_FILE = "data.json"
 
 def load_data():
@@ -76,7 +66,6 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# --- 세션 상태 초기화 ---
 if 'db' not in st.session_state:
     st.session_state.db = load_data()
 if 'logged_in_user' not in st.session_state:
@@ -86,7 +75,7 @@ if 'show_add_form' not in st.session_state:
 if 'reserving_item_id' not in st.session_state:
     st.session_state.reserving_item_id = None
 
-# --- 자동 로그인(세션 토큰) 검증 ---
+# --- 세션 검증 ---
 now = datetime.datetime.now()
 valid_sessions = {}
 for token, info in st.session_state.db.get('sessions', {}).items():
@@ -106,7 +95,7 @@ if st.session_state.logged_in_user is None:
         if url_token in st.session_state.db['sessions']:
             st.session_state.logged_in_user = st.session_state.db['sessions'][url_token]['user_id']
 
-# --- 로그인 / 회원가입 화면 ---
+# --- 로그인 / 회원가입 ---
 if st.session_state.logged_in_user is None:
     st.markdown("<h1 style='text-align: center; color: #1E3A8A; margin-top: 50px;'>가톨릭대학교 기숙사 나눔장터</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
@@ -159,10 +148,11 @@ else:
             with open("logo.png", "rb") as f:
                 logo_base64 = base64.b64encode(f.read()).decode()
         
+        # 확실한 새로고침을 위해 href="." 사용
         if logo_base64:
             st.markdown(f"""
-                <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
-                    <div class="logo-container">
+                <a href="." target="_self" style="text-decoration: none; color: inherit;">
+                    <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px;'>
                         <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
                         <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
                     </div>
@@ -170,8 +160,8 @@ else:
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
-                <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
-                    <div class="logo-container">
+                <a href="." target="_self" style="text-decoration: none; color: inherit;">
+                    <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px;'>
                         <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
                     </div>
                 </a>
@@ -184,7 +174,7 @@ else:
         if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
             st.session_state.show_add_form = not st.session_state.show_add_form
 
-    st.write("") # 간격 띄우기
+    st.write("") 
 
     # --- 가톨릭대 배경 사진 ---
     image_path = "image_0f5c52.jpg"
@@ -325,7 +315,7 @@ else:
                                 st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
                                 st.write(f"**연락처:** {item.get('contact', '')}")
 
-    # --- 사이드바: 내 알림 센터 ---
+    # --- 사이드바 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
     st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
     st.sidebar.divider()
