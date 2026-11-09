@@ -5,19 +5,32 @@ import os
 import json
 import uuid
 
-# --- 페이지 설정 (사이드바 기본 펼침으로 본문 자연스럽게 밀어내기) ---
+# --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide", initial_sidebar_state="expanded")
 
-# --- 최소화된 안전한 CSS ---
+# --- CSS 스타일 적용 (상단바 고정 완벽 적용) ---
 st.markdown("""
     <style>
-    /* 우측 상단 불필요한 기본 메뉴 숨김 */
+    /* 불필요한 기본 메뉴 숨김 */
     .stDeployButton { display: none !important; }
     #MainMenu { display: none !important; }
     
     .stApp { background-color: #F9FAFB; }
     
-    /* 🔥 사이드바 내부 버튼 검은색 적용 (레이아웃 파괴 없음) 🔥 */
+    /* 🔥 상단바 고정 (Sticky) - 레이아웃 깨짐 방지 🔥 */
+    div[data-testid="stVerticalBlock"]:has(#sticky-header) {
+        position: sticky;
+        top: 2.875rem;
+        background-color: #F9FAFB;
+        z-index: 999;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #E5E7EB;
+        margin-top: -1rem;
+        margin-bottom: 1rem;
+    }
+    
+    /* 사이드바 내부 버튼 검은색 적용 */
     [data-testid="stSidebar"] button {
         background-color: #000000 !important;
         color: #ffffff !important;
@@ -38,17 +51,12 @@ st.markdown("""
         border: 1px solid #F3F4F6;
     }
     
-    /* 로고 마우스오버 효과 */
-    .logo-container:hover {
-        opacity: 0.7;
-    }
+    .logo-container:hover { opacity: 0.7; }
     </style>
 """, unsafe_allow_html=True)
 
 CATEGORIES = ["청소용품", "생활용품", "식품(미개봉)", "일회용품", "의류&잡화", "수납&정리용품", "학용품&책", "그 외 다른용품"]
 DORMS = ["안드레아관", "스테파노관"]
-
-# --- 데이터베이스 로드 및 저장 ---
 DATA_FILE = "data.json"
 
 def load_data():
@@ -75,7 +83,6 @@ if 'show_add_form' not in st.session_state:
 if 'reserving_item_id' not in st.session_state:
     st.session_state.reserving_item_id = None
 
-# --- 세션 검증 ---
 now = datetime.datetime.now()
 valid_sessions = {}
 for token, info in st.session_state.db.get('sessions', {}).items():
@@ -139,42 +146,42 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 상단 UI ---
-    header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
-    
-    with header_col1:
-        logo_base64 = ""
-        if os.path.exists("logo.png"):
-            with open("logo.png", "rb") as f:
-                logo_base64 = base64.b64encode(f.read()).decode()
+    # --- 🔥 상단바 고정 영역 ---
+    header_container = st.container()
+    with header_container:
+        st.markdown("<div id='sticky-header'></div>", unsafe_allow_html=True)
+        header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
         
-        # 확실한 새로고침을 위해 href="." 사용
-        if logo_base64:
-            st.markdown(f"""
-                <a href="." target="_self" style="text-decoration: none; color: inherit;">
-                    <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px;'>
-                        <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
-                        <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
-                    </div>
-                </a>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-                <a href="." target="_self" style="text-decoration: none; color: inherit;">
-                    <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px;'>
-                        <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
-                    </div>
-                </a>
-            """, unsafe_allow_html=True)
+        with header_col1:
+            logo_base64 = ""
+            if os.path.exists("logo.png"):
+                with open("logo.png", "rb") as f:
+                    logo_base64 = base64.b64encode(f.read()).decode()
             
-    with header_col2:
-        search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
-        
-    with header_col3:
-        if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
-            st.session_state.show_add_form = not st.session_state.show_add_form
-
-    st.write("") 
+            if logo_base64:
+                st.markdown(f"""
+                    <a href="." target="_self" style="text-decoration: none; color: inherit;">
+                        <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px;'>
+                            <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
+                            <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                        </div>
+                    </a>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                    <a href="." target="_self" style="text-decoration: none; color: inherit;">
+                        <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px;'>
+                            <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                        </div>
+                    </a>
+                """, unsafe_allow_html=True)
+                
+        with header_col2:
+            search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
+            
+        with header_col3:
+            if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
+                st.session_state.show_add_form = not st.session_state.show_add_form
 
     # --- 가톨릭대 배경 사진 ---
     image_path = "image_0f5c52.jpg"
@@ -268,87 +275,3 @@ else:
                             if img_bg:
                                 st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:black; border-radius:8px; overflow:hidden;"><img src="{img_bg}" style="width:100%; height:100%; object-fit:cover; opacity:{opacity};">{overlay_html}</div>', unsafe_allow_html=True)
                             else:
-                                st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:#374151; border-radius:8px; overflow:hidden; display:flex; justify-content:center; align-items:center; color:#9CA3AF;"><div style="opacity:{opacity};">이미지 없음</div>{overlay_html}</div>', unsafe_allow_html=True)
-                            
-                            st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
-                            st.caption(f"{item.get('category')} | {item.get('date')}")
-                            
-                            if status == 'available':
-                                if item.get('uploader_id') != current_user_id:
-                                    if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
-                                        st.session_state.reserving_item_id = item['id']
-                                        st.rerun()
-                                    
-                                    if st.session_state.reserving_item_id == item['id']:
-                                        with st.container(border=True):
-                                            buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
-                                            buyer_contact = st.text_input("연락처", key=f"contact_{item['id']}")
-                                            
-                                            c1, c2 = st.columns(2)
-                                            with c1:
-                                                if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
-                                                    if buyer_sid and buyer_contact:
-                                                        for db_item in st.session_state.db['items']:
-                                                            if db_item['id'] == item['id']:
-                                                                db_item['status'] = 'reserved'
-                                                                db_item['buyer_sid'] = buyer_sid
-                                                                db_item['buyer_contact'] = buyer_contact
-                                                                break
-                                                        save_data(st.session_state.db)
-                                                        st.session_state.reserving_item_id = None
-                                                        st.rerun()
-                                                    else:
-                                                        st.warning("정보를 입력하세요.")
-                                            with c2:
-                                                if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
-                                                    st.session_state.reserving_item_id = None
-                                                    st.rerun()
-                                else:
-                                    if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
-                                        st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
-                                        save_data(st.session_state.db)
-                                        st.rerun()
-                            
-                            with st.expander("상세 보기"):
-                                st.write(f"📍 위치: {item.get('location', '')}")
-                                st.write(f"**설명:** {item.get('desc', '')}")
-                                st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
-                                st.write(f"**연락처:** {item.get('contact', '')}")
-
-    # --- 사이드바 ---
-    st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
-    st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
-    st.sidebar.divider()
-    
-    st.sidebar.markdown("### 🔔 내 물품 알림")
-    my_items = [i for i in st.session_state.db['items'] if i.get('uploader_id') == current_user_id]
-    has_notification = False
-    
-    for my_item in my_items:
-        if my_item.get('status') == 'reserved':
-            has_notification = True
-            with st.sidebar.container(border=True):
-                st.write(f"**{my_item['title']}** 예약 요청!")
-                st.caption(f"학번: {my_item['buyer_sid']}")
-                st.caption(f"연락처: {my_item['buyer_contact']}")
-                if st.button("✅ 수락 (수령 완료처리)", key=f"accept_{my_item['id']}", use_container_width=True):
-                    for db_item in st.session_state.db['items']:
-                        if db_item['id'] == my_item['id']:
-                            db_item['status'] = 'completed'
-                            break
-                    save_data(st.session_state.db)
-                    st.rerun()
-                    
-    if not has_notification:
-        st.sidebar.caption("새로운 수령 예약 알림이 없습니다.")
-    
-    st.sidebar.divider()
-    if st.sidebar.button("로그아웃"):
-        st.session_state.logged_in_user = None
-        if 'session' in st.query_params:
-            url_token = st.query_params['session']
-            if url_token in st.session_state.db.get('sessions', {}):
-                del st.session_state.db['sessions'][url_token]
-                save_data(st.session_state.db)
-            del st.query_params['session']
-        st.rerun()
