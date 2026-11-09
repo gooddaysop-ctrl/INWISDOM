@@ -8,29 +8,25 @@ import uuid
 # --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
 
-# --- CSS 스타일 적용 (상단 바 브라우저 최상단 고정 & 기본 헤더 완전 제거) ---
+# --- CSS 스타일 적용 (상단 바 완벽 고정 및 스트림릿 기본 헤더 숨김) ---
 st.markdown("""
     <style>
     .stApp { background-color: #F9FAFB; }
     
-    /* 스트림릿 기본 헤더 및 여백 제거 */
+    /* 스트림릿 기본 상단 여백 및 햄버거 메뉴 강제 숨김 (우리가 만든 바가 최상단에 붙게 함) */
     header[data-testid="stHeader"] { display: none !important; }
-    .block-container { 
-        padding-top: 100px !important; /* 상단 고정 바 때문에 콘텐츠가 가리지 않도록 여백 확보 */
-    }
+    .block-container { padding-top: 1rem !important; }
     
-    /* 브라우저 최상단에 흰색 바 고정 (Fixed Header) */
-    .fixed-top-bar {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        z-index: 999999 !important;
-        background-color: rgba(255, 255, 255, 0.98) !important;
+    /* 상단 UI 블록 강제 고정 */
+    div[data-testid="stVerticalBlock"]:has(#sticky-header-anchor) {
+        position: sticky !important;
+        top: 0px !important;
+        z-index: 99999 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
         backdrop-filter: blur(10px) !important;
-        padding: 12px 30px !important;
-        border-bottom: 2px solid #E5E7EB !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        padding: 15px 20px !important;
+        border-bottom: 1px solid #E5E7EB !important;
+        margin-bottom: 20px !important;
     }
     
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
@@ -138,34 +134,34 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 상단 고정 바 (HTML 구조로 브라우저 최상단 고정 구현) ---
-    logo_path = "logo.png"
-    logo_html = "<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교</h3>"
-    if os.path.exists(logo_path):
-        with open(logo_path, "rb") as f:
-            logo_b64 = base64.b64encode(f.read()).decode()
-        logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='height: 38px; margin-right: 12px;'>"
+    # --- 상단 UI (스크롤 시 고정 & 가톨릭대 로고 적용) ---
+    header_container = st.container()
+    with header_container:
+        st.markdown("<div id='sticky-header-anchor'></div>", unsafe_allow_html=True)
+        header_col1, header_col2, header_col3 = st.columns([3, 2, 1], vertical_alignment="center")
+        with header_col1:
+            # 전달받은 로고 이미지 파일 적용
+            logo_path = "logo.png"
+            logo_html = "<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교</h3>" # 로고가 없을 때 텍스트 백업
+            if os.path.exists(logo_path):
+                with open(logo_path, "rb") as f:
+                    logo_b64 = base64.b64encode(f.read()).decode()
+                # 텍스트 대신 이미지를 렌더링하고, 바로 옆에 '기숙사 나눔장터' 텍스트를 붙임
+                logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='height: 40px; margin-right: 15px; border-radius: 4px;'>"
 
-    st.markdown(f"""
-        <div class="fixed-top-bar">
-            <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1400px; margin: 0 auto;">
-                <div style="display: flex; align-items: center;">
+            st.markdown(f"""
+                <a href="?" target="_self" style="text-decoration: none; display: flex; align-items: center;">
                     {logo_html}
-                    <span style='font-size: 20px; font-weight: 800; color: #1E3A8A; letter-spacing: -0.5px;'>기숙사 나눔장터 <span style='font-size:15px; font-weight: 500; color:#6B7280;'>({current_user_dorm})</span></span>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+                    <span style='font-size: 22px; font-weight: 800; color: #1E3A8A; letter-spacing: -0.5px;'>기숙사 나눔장터 <span style='font-size:16px; font-weight: 500; color:#6B7280;'>({current_user_dorm})</span></span>
+                </a>
+            """, unsafe_allow_html=True)
+        with header_col2:
+            search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
+        with header_col3:
+            if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
+                st.session_state.show_add_form = not st.session_state.show_add_form
 
-    # 스트림릿 위젯(검색창, 등록 버튼)을 상단 바 위치에 맞게 배치
-    c_empty, col_search, col_btn = st.columns([4, 2, 1])
-    with col_search:
-        search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
-    with col_btn:
-        if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
-            st.session_state.show_add_form = not st.session_state.show_add_form
-
-    # --- 전경 사진 (Fade-out) ---
+    # --- 가톨릭대 배경 사진 (Fade-out) ---
     bg_image_path = "image_0f5c52.jpg"
     if os.path.exists(bg_image_path):
         with open(bg_image_path, "rb") as f:
@@ -180,8 +176,6 @@ else:
                 margin-bottom: 20px;
             "></div>
         """, unsafe_allow_html=True)
-    else:
-        st.info("가톨릭대학교 전경 사진(image_0f5c52.jpg) 파일이 폴더에 있는지 확인해주세요.")
 
     # --- 물품 등록 폼 ---
     if st.session_state.show_add_form:
@@ -225,7 +219,7 @@ else:
                         st.session_state.show_add_form = False
                         st.rerun()
 
-    # --- 물품 리스트 필터링 (괄호 오타 수정 완료) ---
+    # --- 물품 리스트 필터링 ---
     display_items = [i for i in st.session_state.db['items'] if isinstance(i, dict) and i.get('dorm') == current_user_dorm]
     if search_query:
         display_items = [i for i in display_items if search_query.lower() in i.get('title', '').lower() or search_query.lower() in i.get('desc', '').lower()]
@@ -241,6 +235,7 @@ else:
                     item = display_items[i+j]
                     with cols[j]:
                         with st.container(border=True):
+                            # 번개장터 스타일 썸네일 오버레이 처리
                             status = item.get('status', 'available')
                             overlay_html = ""
                             opacity = "1.0"
@@ -261,8 +256,10 @@ else:
                             st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
                             st.caption(f"{item.get('category')} | {item.get('date')}")
                             
+                            # 수령 및 삭제 로직
                             if status == 'available':
                                 if item.get('uploader_id') != current_user_id:
+                                    # 다른 사람의 글: 수령하기 버튼
                                     if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
                                         st.session_state.reserving_item_id = item['id']
                                         st.rerun()
@@ -292,7 +289,7 @@ else:
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
                                 else:
-                                    # 내가 올린 글에만 삭제 버튼 활성화
+                                    # 내가 올린 글: 삭제하기 버튼
                                     if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
                                         st.session_state.db['items'] = [i for i in st.session_state.db['items'] if i['id'] != item['id']]
                                         save_data(st.session_state.db)
