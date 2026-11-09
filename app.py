@@ -3,19 +3,30 @@ import datetime
 import base64
 import os
 import json
+import uuid
 
 # --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
 
+# --- CSS 스타일 적용 (상단 바 고정) ---
 st.markdown("""
     <style>
     .stApp { background-color: #F9FAFB; }
-    .top-bar {
-        background-color: white;
-        padding: 15px 0px;
+    
+    div[data-testid="stVerticalBlock"]:has(#header-anchor) {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background-color: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(5px);
+        padding: 15px 20px;
         border-bottom: 2px solid #E5E7EB;
+        border-radius: 0 0 12px 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        margin-top: -20px;
         margin-bottom: 20px;
     }
+    
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
         border-radius: 12px;
         background-color: white;
@@ -32,13 +43,15 @@ DORMS = ["안드레아관", "스테파노관"]
 DATA_FILE = "data.json"
 
 def load_data():
+    data = {"users": {}, "items": [], "sessions": {}}
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                loaded = json.load(f)
+                data.update(loaded)
         except:
             pass
-    return {"users": {}, "items": []}
+    return data
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -51,7 +64,30 @@ if 'logged_in_user' not in st.session_state:
 if 'show_add_form' not in st.session_state:
     st.session_state.show_add_form = False
 if 'reserving_item_id' not in st.session_state:
-    st.session_state.reserving_item_id = None # 예약 진행 중인 아이템 ID 저장
+    st.session_state.reserving_item_id = None
+
+# --- 자동 로그인(세션 토큰) 검증 및 만료 처리 ---
+now = datetime.datetime.now()
+valid_sessions = {}
+for token, info in st.session_state.db.get('sessions', {}).items():
+    try:
+        # 만료 시간이 현재 시간보다 남아있는 경우만 유지
+        if datetime.datetime.fromisoformat(info['expires']) > now:
+            valid_sessions[token] = info
+    except:
+        pass
+
+# 만료된 세션이 있다면 DB 갱신
+if len(valid_sessions) != len(st.session_state.db.get('sessions', {})):
+    st.session_state.db['sessions'] = valid_sessions
+    save_data(st.session_state.db)
+
+# 접속 시 URL에 유효한 세션 토큰이 있으면 자동 로그인 처리
+if st.session_state.logged_in_user is None:
+    if 'session' in st.query_params:
+        url_token = st.query_params['session']
+        if url_token in st.session_state.db['sessions']:
+            st.session_state.logged_in_user = st.session_state.db['sessions'][url_token]['user_id']
 
 # --- 로그인 / 회원가입 화면 ---
 if st.session_state.logged_in_user is None:
@@ -63,9 +99,22 @@ if st.session_state.logged_in_user is None:
             with st.form("login_form"):
                 login_id = st.text_input("아이디")
                 login_pw = st.text_input("비밀번호", type="password")
+                
+                # 자동 로그인 체크박스 추가
+                auto_login = st.checkbox("자동 로그인 (10분 유지)", value=True)
+                
                 if st.form_submit_button("로그인", use_container_width=True):
                     if login_id in st.session_state.db['users'] and st.session_state.db['users'][login_id]['pw'] == login_pw:
                         st.session_state.logged_in_user = login_id
+                        
+                        if auto_login:
+                            # 10분 뒤 만료되는 토큰 생성 및 URL 삽입
+                            new_token = str(uuid.uuid4())
+                            expire_time = (now + datetime.timedelta(minutes=10)).isoformat()
+                            st.session_state.db['sessions'][new_token] = {'user_id': login_id, 'expires': expire_time}
+                            save_data(st.session_state.db)
+                            st.query_params['session'] = new_token
+                            
                         st.rerun()
                     else:
                         st.error("아이디 또는 비밀번호가 틀렸습니다.")
@@ -89,21 +138,19 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 상단 UI ---
-    st.markdown("<div class='top-bar'>", unsafe_allow_html=True)
-    header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
-    with header_col1:
-        st.markdown(f"""
-            <a href="?" target="_self" style="text-decoration: none;">
-                <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
-            </a>
-        """, unsafe_allow_html=True)
-    with header_col2:
-        search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
-    with header_col3:
-        if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
-            st.session_state.show_add_form = not st.session_state.show_add_form
-    st.markdown("</div>", unsafe_allow_html=True)
+    # --- 상단 UI (스크롤 시 고정) ---
+    header_container = st.container()
+    with header_container:
+        st.markdown("<div id='header-anchor'></div>", unsafe_allow_html=True)
+        header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
+        with header_col1:
+            # 클릭 시 새로고침 대신 브라우저의 기본 F5를 권장하도록 제목만 남김 (URL 파라미터 유지를 위함)
+            st.markdown(f"<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>", unsafe_allow_html=True)
+        with header_col2:
+            search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
+        with header_col3:
+            if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
+                st.session_state.show_add_form = not st.session_state.show_add_form
 
     # --- 가톨릭대 사진 (Fade-out) ---
     image_path = "image_0f5c52.jpg"
@@ -144,7 +191,7 @@ else:
                         image_data = base64.b64encode(item_image.read()).decode() if item_image else None
                         new_item = {
                             "id": len(st.session_state.db['items']) + 1,
-                            "uploader_id": current_user_id, # 작성자 ID 추가
+                            "uploader_id": current_user_id,
                             "title": item_name,
                             "category": item_category,
                             "desc": item_desc,
@@ -154,7 +201,7 @@ else:
                             "dorm": current_user_dorm,
                             "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "image_data": image_data,
-                            "status": "available", # available, reserved, completed
+                            "status": "available",
                             "buyer_sid": "",
                             "buyer_contact": ""
                         }
@@ -179,7 +226,7 @@ else:
                     item = display_items[i+j]
                     with cols[j]:
                         with st.container(border=True):
-                            # --- 1. 번개장터 스타일 이미지 오버레이 처리 ---
+                            # 번개장터 스타일 썸네일 오버레이 처리
                             status = item.get('status', 'available')
                             overlay_html = ""
                             opacity = "1.0"
@@ -191,36 +238,31 @@ else:
                                 opacity = "0.3"
                                 overlay_html = '<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; text-align:center; text-shadow:0px 2px 4px rgba(0,0,0,0.8);"><div style="font-size:36px;">✅</div><div style="font-size:16px; font-weight:bold;">수령 완료</div></div>'
 
-                            # 썸네일 렌더링
                             img_bg = f"data:image/jpeg;base64,{item['image_data']}" if item.get('image_data') else ""
                             if img_bg:
                                 st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:black; border-radius:8px; overflow:hidden;"><img src="{img_bg}" style="width:100%; height:100%; object-fit:cover; opacity:{opacity};">{overlay_html}</div>', unsafe_allow_html=True)
                             else:
                                 st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:#374151; border-radius:8px; overflow:hidden; display:flex; justify-content:center; align-items:center; color:#9CA3AF;"><div style="opacity:{opacity};">이미지 없음</div>{overlay_html}</div>', unsafe_allow_html=True)
                             
-                            # --- 2. 기본 정보 ---
                             st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
                             st.caption(f"{item.get('category')} | {item.get('date')}")
                             
-                            # --- 3. 수령 기능 로직 ---
+                            # 수령 기능 로직
                             if status == 'available':
-                                if item.get('uploader_id') != current_user_id: # 내 물건은 내가 예약 불가
-                                    # 예약 폼 열기 버튼
+                                if item.get('uploader_id') != current_user_id:
                                     if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
                                         st.session_state.reserving_item_id = item['id']
                                         st.rerun()
                                     
-                                    # 예약 폼 (해당 아이템에서 수령하기를 눌렀을 때만 나타남)
                                     if st.session_state.reserving_item_id == item['id']:
                                         with st.container(border=True):
                                             buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
-                                            buyer_contact = st.text_input("연락처 (전화번호 등)", key=f"contact_{item['id']}")
+                                            buyer_contact = st.text_input("연락처", key=f"contact_{item['id']}")
                                             
                                             c1, c2 = st.columns(2)
                                             with c1:
                                                 if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
                                                     if buyer_sid and buyer_contact:
-                                                        # 데이터 업데이트 (예약중 상태로 변경)
                                                         for db_item in st.session_state.db['items']:
                                                             if db_item['id'] == item['id']:
                                                                 db_item['status'] = 'reserved'
@@ -237,17 +279,15 @@ else:
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
                             
-                            # 상세 내용 확장(Expander)
                             with st.expander("상세 보기"):
                                 st.write(f"📍 위치: {item.get('location', '')}")
                                 st.write(f"**설명:** {item.get('desc', '')}")
                                 st.write(f"**닉네임:** {item.get('nickname', '')}")
                                 st.write(f"**오픈채팅/연락처:** {item.get('contact', '')}")
 
-    # --- 사이드바: 프로필 및 내 알림 센터 ---
+    # --- 사이드바: 내 알림 센터 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
     st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
-    
     st.sidebar.divider()
     
     st.sidebar.markdown("### 🔔 내 물품 알림")
@@ -262,7 +302,6 @@ else:
                 st.caption(f"학번: {my_item['buyer_sid']}")
                 st.caption(f"연락처: {my_item['buyer_contact']}")
                 if st.button("✅ 수락 (수령 완료처리)", key=f"accept_{my_item['id']}", use_container_width=True):
-                    # 상태를 완료로 변경
                     for db_item in st.session_state.db['items']:
                         if db_item['id'] == my_item['id']:
                             db_item['status'] = 'completed'
@@ -276,4 +315,11 @@ else:
     st.sidebar.divider()
     if st.sidebar.button("로그아웃"):
         st.session_state.logged_in_user = None
+        # 로그아웃 시 세션 토큰 및 URL 파라미터 완벽 삭제
+        if 'session' in st.query_params:
+            url_token = st.query_params['session']
+            if url_token in st.session_state.db.get('sessions', {}):
+                del st.session_state.db['sessions'][url_token]
+                save_data(st.session_state.db)
+            del st.query_params['session']
         st.rerun()
