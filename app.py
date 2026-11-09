@@ -8,7 +8,7 @@ import uuid
 # --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
 
-# --- CSS 스타일 적용 (상단 바 브라우저 최상단에 고정 & 기본 헤더 완전 제거) ---
+# --- CSS 스타일 적용 (상단 바 브라우저 최상단 고정 & 기본 헤더 완전 제거) ---
 st.markdown("""
     <style>
     .stApp { background-color: #F9FAFB; }
@@ -225,8 +225,8 @@ else:
                         st.session_state.show_add_form = False
                         st.rerun()
 
-    # --- 물품 리스트 필터링 ---
-    display_items = [i for i in st.session_state.db['items'] if isinstance(i, dict) and i.get('dorm'] == current_user_dorm]
+    # --- 물품 리스트 필터링 (괄호 오타 수정 완료) ---
+    display_items = [i for i in st.session_state.db['items'] if isinstance(i, dict) and i.get('dorm') == current_user_dorm]
     if search_query:
         display_items = [i for i in display_items if search_query.lower() in i.get('title', '').lower() or search_query.lower() in i.get('desc', '').lower()]
 
