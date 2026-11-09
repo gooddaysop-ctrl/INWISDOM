@@ -5,37 +5,18 @@ import os
 import json
 import uuid
 
-# --- 페이지 설정 (사이드바 기본 펼침으로 설정하여 본문을 자연스럽게 밀어냄) ---
+# --- 페이지 설정 (사이드바 기본 펼침) ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS 스타일 적용 (상단바 고정 & 사이드바 블랙 버튼 완벽 적용) ---
+# --- CSS 스타일 적용 (레이아웃 파괴 원인 제거, 사이드바 버튼 블랙 적용) ---
 st.markdown("""
     <style>
-    /* 기본 제공되는 툴바 및 헤더 숨김 */
-    header[data-testid="stHeader"] {
-        display: none !important;
-    }
+    /* 우측 상단 Deploy 버튼과 메뉴만 숨기고, 좌측 사이드바 여는 버튼(햄버거)은 살려둠 */
+    .stDeployButton { display: none !important; }
+    #MainMenu { visibility: hidden !important; }
     
+    /* 전체 배경색 */
     .stApp { background-color: #F9FAFB; }
-    
-    /* 본문이 고정 헤더에 가려지지 않도록 최상단 여백 넉넉히 확보 */
-    .main .block-container {
-        padding-top: 120px !important;
-    }
-    
-    /* 커스텀 헤더 최상단 강제 고정 */
-    /* z-index를 90으로 주어 사이드바(보통 100 이상)가 열릴 때 자연스럽게 덮이며 본문이 밀리도록 유도 */
-    div[data-testid="stVerticalBlock"]:has(#header-anchor) {
-        position: fixed !important;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 90; 
-        background-color: rgba(255, 255, 255, 0.98);
-        padding: 15px 3rem 15px 3rem;
-        border-bottom: 2px solid #E5E7EB;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    }
     
     /* 🔥 사이드바 내부 버튼 디자인: 완전한 검은색 🔥 */
     section[data-testid="stSidebar"] .stButton > button {
@@ -169,42 +150,41 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 상단 UI (강제 고정 영역) ---
-    header_container = st.container()
-    with header_container:
-        st.markdown("<div id='header-anchor'></div>", unsafe_allow_html=True)
-        header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
+    # --- 상단 UI ---
+    header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
+    
+    with header_col1:
+        logo_base64 = ""
+        if os.path.exists("logo.png"):
+            with open("logo.png", "rb") as f:
+                logo_base64 = base64.b64encode(f.read()).decode()
         
-        with header_col1:
-            logo_base64 = ""
-            if os.path.exists("logo.png"):
-                with open("logo.png", "rb") as f:
-                    logo_base64 = base64.b64encode(f.read()).decode()
+        if logo_base64:
+            st.markdown(f"""
+                <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
+                    <div class="logo-container">
+                        <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
+                        <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                    </div>
+                </a>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+                <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
+                    <div class="logo-container">
+                        <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                    </div>
+                </a>
+            """, unsafe_allow_html=True)
             
-            if logo_base64:
-                st.markdown(f"""
-                    <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
-                        <div class="logo-container">
-                            <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
-                            <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
-                        </div>
-                    </a>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                    <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
-                        <div class="logo-container">
-                            <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
-                        </div>
-                    </a>
-                """, unsafe_allow_html=True)
-                
-        with header_col2:
-            search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
-            
-        with header_col3:
-            if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
-                st.session_state.show_add_form = not st.session_state.show_add_form
+    with header_col2:
+        search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
+        
+    with header_col3:
+        if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
+            st.session_state.show_add_form = not st.session_state.show_add_form
+
+    st.write("") # 간격 띄우기
 
     # --- 가톨릭대 배경 사진 ---
     image_path = "image_0f5c52.jpg"
@@ -244,7 +224,6 @@ else:
                         st.warning("물건 이름, 위치, 닉네임은 필수입니다.")
                     else:
                         image_data = base64.b64encode(item_image.read()).decode() if item_image else None
-                        # 아이디 부여 로직 안전성 강화
                         new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
                         
                         new_item = {
@@ -346,7 +325,7 @@ else:
                                 st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
                                 st.write(f"**연락처:** {item.get('contact', '')}")
 
-    # --- 사이드바: 내 알림 센터 (버튼 블랙 적용) ---
+    # --- 사이드바: 내 알림 센터 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
     st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
     st.sidebar.divider()
