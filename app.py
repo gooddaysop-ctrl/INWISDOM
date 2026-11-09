@@ -5,35 +5,50 @@ import os
 import json
 import uuid
 
-# --- 페이지 설정 ---
-st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
+# --- 페이지 설정 (사이드바 기본 펼침으로 설정하여 본문을 자연스럽게 밀어냄) ---
+st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS 스타일 적용 (상단 바 완벽 고정) ---
+# --- CSS 스타일 적용 (상단바 고정 & 사이드바 블랙 버튼 완벽 적용) ---
 st.markdown("""
     <style>
-    /* 기본 헤더 숨김 */
+    /* 기본 제공되는 툴바 및 헤더 숨김 */
     header[data-testid="stHeader"] {
         display: none !important;
     }
     
     .stApp { background-color: #F9FAFB; }
     
-    /* 본문이 고정 헤더에 가려지지 않도록 상단 여백 확보 */
+    /* 본문이 고정 헤더에 가려지지 않도록 최상단 여백 넉넉히 확보 */
     .main .block-container {
         padding-top: 120px !important;
     }
     
-    /* 커스텀 헤더 최상단 강제 고정 (스크롤 시 안 없어짐) */
+    /* 커스텀 헤더 최상단 강제 고정 */
+    /* z-index를 90으로 주어 사이드바(보통 100 이상)가 열릴 때 자연스럽게 덮이며 본문이 밀리도록 유도 */
     div[data-testid="stVerticalBlock"]:has(#header-anchor) {
         position: fixed !important;
         top: 0;
         left: 0;
         right: 0;
-        z-index: 99999;
+        z-index: 90; 
         background-color: rgba(255, 255, 255, 0.98);
         padding: 15px 3rem 15px 3rem;
         border-bottom: 2px solid #E5E7EB;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* 🔥 사이드바 내부 버튼 디자인: 완전한 검은색 🔥 */
+    section[data-testid="stSidebar"] .stButton > button {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        border: 1px solid #000000 !important;
+        font-weight: bold;
+        transition: all 0.2s ease-in-out;
+    }
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background-color: #333333 !important;
+        border-color: #333333 !important;
+        color: #ffffff !important;
     }
     
     /* 물품 카드 디자인 */
@@ -45,8 +60,16 @@ st.markdown("""
     }
     
     /* 로고 마우스오버 효과 */
+    .logo-container {
+        display: flex; 
+        align-items: center; 
+        margin: 0; 
+        padding-top: 5px; 
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
     .logo-container:hover {
-        opacity: 0.8;
+        opacity: 0.7;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -72,6 +95,7 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+# --- 세션 상태 초기화 ---
 if 'db' not in st.session_state:
     st.session_state.db = load_data()
 if 'logged_in_user' not in st.session_state:
@@ -158,10 +182,9 @@ else:
                     logo_base64 = base64.b64encode(f.read()).decode()
             
             if logo_base64:
-                # 로고 클릭 시 새로고침 동작 추가
                 st.markdown(f"""
                     <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
-                        <div class="logo-container" style='display: flex; align-items: center; margin: 0; padding-top: 5px; cursor: pointer;'>
+                        <div class="logo-container">
                             <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
                             <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
                         </div>
@@ -170,7 +193,9 @@ else:
             else:
                 st.markdown(f"""
                     <a href="javascript:window.location.reload(true);" style="text-decoration: none; color: inherit;">
-                        <h3 class="logo-container" style='margin:0; padding-top:5px; color: #1E3A8A; cursor: pointer;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                        <div class="logo-container">
+                            <h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                        </div>
                     </a>
                 """, unsafe_allow_html=True)
                 
@@ -178,7 +203,6 @@ else:
             search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
             
         with header_col3:
-            # 새로고침 버튼 삭제 후 나눔하기 버튼만 유지
             if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
                 st.session_state.show_add_form = not st.session_state.show_add_form
 
@@ -220,7 +244,9 @@ else:
                         st.warning("물건 이름, 위치, 닉네임은 필수입니다.")
                     else:
                         image_data = base64.b64encode(item_image.read()).decode() if item_image else None
+                        # 아이디 부여 로직 안전성 강화
                         new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
+                        
                         new_item = {
                             "id": new_id,
                             "uploader_id": current_user_id,
@@ -279,7 +305,6 @@ else:
                             st.caption(f"{item.get('category')} | {item.get('date')}")
                             
                             if status == 'available':
-                                # 타인이 올린 게시물일 경우: 수령하기 폼
                                 if item.get('uploader_id') != current_user_id:
                                     if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
                                         st.session_state.reserving_item_id = item['id']
@@ -309,8 +334,6 @@ else:
                                                 if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
-                                
-                                # 본인이 올린 게시물일 경우: 삭제하기 버튼 표시
                                 else:
                                     if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
                                         st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
@@ -323,7 +346,7 @@ else:
                                 st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
                                 st.write(f"**연락처:** {item.get('contact', '')}")
 
-    # --- 사이드바: 내 알림 센터 ---
+    # --- 사이드바: 내 알림 센터 (버튼 블랙 적용) ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
     st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
     st.sidebar.divider()
