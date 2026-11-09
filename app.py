@@ -146,7 +146,7 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 🔥 상단바 고정 영역 (이 컨테이너 전체가 스크롤 시 상단에 붙습니다) 🔥 ---
+    # --- 🔥 상단바 고정 영역 ---
     header_container = st.container()
     with header_container:
         st.markdown("<div id='sticky-header'></div>", unsafe_allow_html=True)
@@ -311,7 +311,6 @@ else:
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
                                 else:
-                                    # 🔥 자신이 올린 게시물은 삭제 가능하도록 처리됨
                                     if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
                                         st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
                                         save_data(st.session_state.db)
@@ -359,14 +358,4 @@ else:
                 del st.session_state.db['sessions'][url_token]
                 save_data(st.session_state.db)
             del st.query_params['session']
-        st.rerun()
-        
-    st.sidebar.divider()
-    
-    # 🔥 기존 데이터 깔끔하게 밀어버리는 초기화 버튼 (테스트용)
-    if st.sidebar.button("🚨 모든 데이터 초기화 (게시물/회원 삭제)", type="secondary"):
-        if os.path.exists(DATA_FILE):
-            os.remove(DATA_FILE)
-        st.session_state.db = {"users": {}, "items": [], "sessions": {}}
-        st.session_state.logged_in_user = None
         st.rerun()
