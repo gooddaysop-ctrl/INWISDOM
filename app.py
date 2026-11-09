@@ -8,11 +8,17 @@ import uuid
 # --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
 
-# --- CSS 스타일 적용 (상단 바 고정) ---
+# --- CSS 스타일 적용 (상단 바 고정 및 기본 헤더 숨김) ---
 st.markdown("""
     <style>
+    /* Streamlit 기본 상단 헤더 숨김 */
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+    
     .stApp { background-color: #F9FAFB; }
     
+    /* 커스텀 헤더 고정 */
     div[data-testid="stVerticalBlock"]:has(#header-anchor) {
         position: sticky;
         top: 0;
@@ -23,7 +29,7 @@ st.markdown("""
         border-bottom: 2px solid #E5E7EB;
         border-radius: 0 0 12px 12px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        margin-top: -20px;
+        margin-top: 0px; /* 여백 조정 */
         margin-bottom: 20px;
     }
     
@@ -71,18 +77,15 @@ now = datetime.datetime.now()
 valid_sessions = {}
 for token, info in st.session_state.db.get('sessions', {}).items():
     try:
-        # 만료 시간이 현재 시간보다 남아있는 경우만 유지
         if datetime.datetime.fromisoformat(info['expires']) > now:
             valid_sessions[token] = info
     except:
         pass
 
-# 만료된 세션이 있다면 DB 갱신
 if len(valid_sessions) != len(st.session_state.db.get('sessions', {})):
     st.session_state.db['sessions'] = valid_sessions
     save_data(st.session_state.db)
 
-# 접속 시 URL에 유효한 세션 토큰이 있으면 자동 로그인 처리
 if st.session_state.logged_in_user is None:
     if 'session' in st.query_params:
         url_token = st.query_params['session']
@@ -99,22 +102,17 @@ if st.session_state.logged_in_user is None:
             with st.form("login_form"):
                 login_id = st.text_input("아이디")
                 login_pw = st.text_input("비밀번호", type="password")
-                
-                # 자동 로그인 체크박스 추가
                 auto_login = st.checkbox("자동 로그인 (10분 유지)", value=True)
                 
                 if st.form_submit_button("로그인", use_container_width=True):
                     if login_id in st.session_state.db['users'] and st.session_state.db['users'][login_id]['pw'] == login_pw:
                         st.session_state.logged_in_user = login_id
-                        
                         if auto_login:
-                            # 10분 뒤 만료되는 토큰 생성 및 URL 삽입
                             new_token = str(uuid.uuid4())
                             expire_time = (now + datetime.timedelta(minutes=10)).isoformat()
                             st.session_state.db['sessions'][new_token] = {'user_id': login_id, 'expires': expire_time}
                             save_data(st.session_state.db)
                             st.query_params['session'] = new_token
-                            
                         st.rerun()
                     else:
                         st.error("아이디 또는 비밀번호가 틀렸습니다.")
@@ -144,8 +142,22 @@ else:
         st.markdown("<div id='header-anchor'></div>", unsafe_allow_html=True)
         header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
         with header_col1:
-            # 클릭 시 새로고침 대신 브라우저의 기본 F5를 권장하도록 제목만 남김 (URL 파라미터 유지를 위함)
-            st.markdown(f"<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>", unsafe_allow_html=True)
+            # 로고 이미지 로드 및 렌더링
+            logo_base64 = ""
+            if os.path.exists("logo.png"):
+                with open("logo.png", "rb") as f:
+                    logo_base64 = base64.b64encode(f.read()).decode()
+            
+            if logo_base64:
+                st.markdown(f"""
+                    <div style='display: flex; align-items: center; margin: 0;'>
+                        <img src='data:image/png;base64,{logo_base64}' style='height: 35px; margin-right: 12px; object-fit: contain;'>
+                        <h3 style='margin:0; color: #1E3A8A;'>기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>", unsafe_allow_html=True)
+                
         with header_col2:
             search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
         with header_col3:
@@ -189,8 +201,9 @@ else:
                         st.warning("물건 이름, 위치, 닉네임은 필수입니다.")
                     else:
                         image_data = base64.b64encode(item_image.read()).decode() if item_image else None
+                        new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
                         new_item = {
-                            "id": len(st.session_state.db['items']) + 1,
+                            "id": new_id,
                             "uploader_id": current_user_id,
                             "title": item_name,
                             "category": item_category,
@@ -226,7 +239,6 @@ else:
                     item = display_items[i+j]
                     with cols[j]:
                         with st.container(border=True):
-                            # 번개장터 스타일 썸네일 오버레이 처리
                             status = item.get('status', 'available')
                             overlay_html = ""
                             opacity = "1.0"
@@ -278,6 +290,14 @@ else:
                                                 if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
+                                
+                                # --- 작성자 본인일 경우 삭제 버튼 표시 ---
+                                else:
+                                    if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
+                                        # 삭제 처리 후 데이터 저장 및 새로고침
+                                        st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
+                                        save_data(st.session_state.db)
+                                        st.rerun()
                             
                             with st.expander("상세 보기"):
                                 st.write(f"📍 위치: {item.get('location', '')}")
@@ -315,7 +335,6 @@ else:
     st.sidebar.divider()
     if st.sidebar.button("로그아웃"):
         st.session_state.logged_in_user = None
-        # 로그아웃 시 세션 토큰 및 URL 파라미터 완벽 삭제
         if 'session' in st.query_params:
             url_token = st.query_params['session']
             if url_token in st.session_state.db.get('sessions', {}):
