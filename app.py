@@ -6,40 +6,25 @@ import json
 import uuid
 
 # --- 페이지 설정 ---
-st.set_page_config(
-    page_title="가톨릭대학교 기숙사 나눔장터", 
-    layout="wide", 
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide")
 
-# --- CSS 스타일 적용 ---
+# --- CSS 스타일 적용 (상단 바 고정) ---
 st.markdown("""
     <style>
     .stApp { background-color: #F9FAFB; }
     
-    header[data-testid="stHeader"] { display: none !important; }
-    .block-container { 
-        padding-top: 100px !important; 
-    }
-    
-    .fixed-top-bar {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        z-index: 999999 !important;
-        background-color: rgba(255, 255, 255, 0.98) !important;
-        backdrop-filter: blur(10px) !important;
-        padding: 12px 30px !important;
-        border-bottom: 2px solid #E5E7EB !important;
+    div[data-testid="stVerticalBlock"]:has(#header-anchor) {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background-color: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(5px);
+        padding: 15px 20px;
+        border-bottom: 2px solid #E5E7EB;
+        border-radius: 0 0 12px 12px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    }
-    
-    section[data-testid="stSidebar"] {
-        width: 280px !important;
-        min-width: 280px !important;
-        display: block !important;
-        visibility: visible !important;
+        margin-top: -20px;
+        margin-bottom: 20px;
     }
     
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
@@ -86,15 +71,18 @@ now = datetime.datetime.now()
 valid_sessions = {}
 for token, info in st.session_state.db.get('sessions', {}).items():
     try:
+        # 만료 시간이 현재 시간보다 남아있는 경우만 유지
         if datetime.datetime.fromisoformat(info['expires']) > now:
             valid_sessions[token] = info
     except:
         pass
 
+# 만료된 세션이 있다면 DB 갱신
 if len(valid_sessions) != len(st.session_state.db.get('sessions', {})):
     st.session_state.db['sessions'] = valid_sessions
     save_data(st.session_state.db)
 
+# 접속 시 URL에 유효한 세션 토큰이 있으면 자동 로그인 처리
 if st.session_state.logged_in_user is None:
     if 'session' in st.query_params:
         url_token = st.query_params['session']
@@ -111,6 +99,8 @@ if st.session_state.logged_in_user is None:
             with st.form("login_form"):
                 login_id = st.text_input("아이디")
                 login_pw = st.text_input("비밀번호", type="password")
+                
+                # 자동 로그인 체크박스 추가
                 auto_login = st.checkbox("자동 로그인 (10분 유지)", value=True)
                 
                 if st.form_submit_button("로그인", use_container_width=True):
@@ -118,6 +108,7 @@ if st.session_state.logged_in_user is None:
                         st.session_state.logged_in_user = login_id
                         
                         if auto_login:
+                            # 10분 뒤 만료되는 토큰 생성 및 URL 삽입
                             new_token = str(uuid.uuid4())
                             expire_time = (now + datetime.timedelta(minutes=10)).isoformat()
                             st.session_state.db['sessions'][new_token] = {'user_id': login_id, 'expires': expire_time}
@@ -147,49 +138,35 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 상단 고정 바 ---
-    logo_path = "logo.png"
-    logo_html = "<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교</h3>"
-    if os.path.exists(logo_path):
-        with open(logo_path, "rb") as f:
-            logo_b64 = base64.b64encode(f.read()).decode()
-        logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='height: 38px; margin-right: 12px;'>"
+    # --- 상단 UI (스크롤 시 고정) ---
+    header_container = st.container()
+    with header_container:
+        st.markdown("<div id='header-anchor'></div>", unsafe_allow_html=True)
+        header_col1, header_col2, header_col3 = st.columns([3, 2, 1])
+        with header_col1:
+            # 클릭 시 새로고침 대신 브라우저의 기본 F5를 권장하도록 제목만 남김 (URL 파라미터 유지를 위함)
+            st.markdown(f"<h3 style='margin:0; color: #1E3A8A;'>가톨릭대학교 기숙사 나눔장터 <span style='font-size:16px; color:#6B7280;'>({current_user_dorm})</span></h3>", unsafe_allow_html=True)
+        with header_col2:
+            search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
+        with header_col3:
+            if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
+                st.session_state.show_add_form = not st.session_state.show_add_form
 
-    st.markdown(f"""
-        <div class="fixed-top-bar">
-            <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1400px; margin: 0 auto;">
-                <div style="display: flex; align-items: center;">
-                    {logo_html}
-                    <span style='font-size: 20px; font-weight: 800; color: #1E3A8A; letter-spacing: -0.5px;'>기숙사 나눔장터 <span style='font-size:15px; font-weight: 500; color:#6B7280;'>({current_user_dorm})</span></span>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    c_empty, col_search, col_btn = st.columns([4, 2, 1])
-    with col_search:
-        search_query = st.text_input("검색", placeholder="어떤 물품을 찾으시나요?", label_visibility="collapsed")
-    with col_btn:
-        if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
-            st.session_state.show_add_form = not st.session_state.show_add_form
-
-    # --- 전경 사진 (Fade-out) ---
-    bg_image_path = "image_0f5c52.jpg"
-    if os.path.exists(bg_image_path):
-        with open(bg_image_path, "rb") as f:
-            bg_base64 = base64.b64encode(f.read()).decode()
+    # --- 가톨릭대 사진 (Fade-out) ---
+    image_path = "image_0f5c52.jpg"
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as f:
+            img_base64 = base64.b64encode(f.read()).decode()
         st.markdown(f"""
             <div style="
                 width: 100%; height: 450px; 
-                background-image: url('data:image/jpeg;base64,{bg_base64}'); 
+                background-image: url('data:image/jpeg;base64,{img_base64}'); 
                 background-size: cover; background-position: center; 
                 -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 100%);
                 mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 100%);
                 margin-bottom: 20px;
             "></div>
         """, unsafe_allow_html=True)
-    else:
-        st.info("가톨릭대학교 전경 사진(image_0f5c52.jpg) 파일이 폴더에 있는지 확인해주세요.")
 
     # --- 물품 등록 폼 ---
     if st.session_state.show_add_form:
@@ -249,6 +226,7 @@ else:
                     item = display_items[i+j]
                     with cols[j]:
                         with st.container(border=True):
+                            # 번개장터 스타일 썸네일 오버레이 처리
                             status = item.get('status', 'available')
                             overlay_html = ""
                             opacity = "1.0"
@@ -269,6 +247,7 @@ else:
                             st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
                             st.caption(f"{item.get('category')} | {item.get('date')}")
                             
+                            # 수령 기능 로직
                             if status == 'available':
                                 if item.get('uploader_id') != current_user_id:
                                     if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
@@ -299,11 +278,6 @@ else:
                                                 if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
                                                     st.session_state.reserving_item_id = None
                                                     st.rerun()
-                                else:
-                                    if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
-                                        st.session_state.db['items'] = [i for i in st.session_state.db['items'] if i['id'] != item['id']]
-                                        save_data(st.session_state.db)
-                                        st.rerun()
                             
                             with st.expander("상세 보기"):
                                 st.write(f"📍 위치: {item.get('location', '')}")
@@ -341,6 +315,7 @@ else:
     st.sidebar.divider()
     if st.sidebar.button("로그아웃"):
         st.session_state.logged_in_user = None
+        # 로그아웃 시 세션 토큰 및 URL 파라미터 완벽 삭제
         if 'session' in st.query_params:
             url_token = st.query_params['session']
             if url_token in st.session_state.db.get('sessions', {}):
