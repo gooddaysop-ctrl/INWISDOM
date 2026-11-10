@@ -326,4 +326,112 @@ else:
                         if not item_name or not item_location or not item_nickname:
                             st.warning("물건 이름, 위치, 닉네임은 필수입니다.")
                         else:
-                            image_data = base64.b64encode(item_image.read
+                            image_data = base64.b64encode(item_image.read()).decode() if item_image else None
+                            new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
+                            
+                            new_item = {
+                                "id": new_id,
+                                "uploader_id": current_user_id,
+                                "title": item_name,
+                                "category": item_category,
+                                "desc": item_desc,
+                                "location": item_location,
+                                "contact": item_contact,
+                                "nickname": item_nickname,
+                                "dorm": current_user_dorm,
+                                "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                "image_data": image_data,
+                                "status": "available",
+                                "buyer_sid": "",
+                                "buyer_contact": "",
+                                "buyer_id": ""  # 채팅을 위해 구매자 ID 필드 추가
+                            }
+                            st.session_state.db['items'].insert(0, new_item)
+                            save_data(st.session_state.db)
+                            st.session_state.show_add_form = False
+                            st.rerun()
+
+        # 물품 리스트
+        display_items = [i for i in st.session_state.db['items'] if isinstance(i, dict) and i.get('dorm') == current_user_dorm]
+        if search_query:
+            display_items = [i for i in display_items if search_query.lower() in i.get('title', '').lower() or search_query.lower() in i.get('desc', '').lower()]
+
+        st.markdown("#### 🎁 실시간 나눔 목록")
+        if not display_items:
+            st.write("아직 올라온 물품이 없습니다. 상단의 '➕ 물품 나눔하기'를 눌러 첫 게시글을 올려보세요!")
+        else:
+            for i in range(0, len(display_items), 4):
+                cols = st.columns(4)
+                for j in range(4):
+                    if i + j < len(display_items):
+                        item = display_items[i+j]
+                        with cols[j]:
+                            with st.container(border=True):
+                                status = item.get('status', 'available')
+                                overlay_html = ""
+                                opacity = "1.0"
+                                
+                                if status == 'reserved':
+                                    opacity = "0.3"
+                                    overlay_html = '<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; text-align:center; text-shadow:0px 2px 4px rgba(0,0,0,0.8);"><div style="font-size:36px;">🕒</div><div style="font-size:16px; font-weight:bold;">예약중</div></div>'
+                                elif status == 'completed':
+                                    opacity = "0.3"
+                                    overlay_html = '<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; text-align:center; text-shadow:0px 2px 4px rgba(0,0,0,0.8);"><div style="font-size:36px;">✅</div><div style="font-size:16px; font-weight:bold;">수령 완료</div></div>'
+
+                                img_bg = f"data:image/jpeg;base64,{item['image_data']}" if item.get('image_data') else ""
+                                if img_bg:
+                                    st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:black; border-radius:8px; overflow:hidden;"><img src="{img_bg}" style="width:100%; height:100%; object-fit:cover; opacity:{opacity};">{overlay_html}</div>', unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:#374151; border-radius:8px; overflow:hidden; display:flex; justify-content:center; align-items:center; color:#9CA3AF;"><div style="opacity:{opacity};">이미지 없음</div>{overlay_html}</div>', unsafe_allow_html=True)
+                                
+                                st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
+                                st.caption(f"{item.get('category')} | {item.get('date')}")
+                                
+                                if status == 'available':
+                                    if item.get('uploader_id') != current_user_id:
+                                        if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
+                                            st.session_state.reserving_item_id = item['id']
+                                            st.rerun()
+                                        
+                                        if st.session_state.reserving_item_id == item['id']:
+                                            with st.container(border=True):
+                                                buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
+                                                buyer_contact = st.text_input("연락처", key=f"contact_{item['id']}")
+                                                
+                                                c1, c2 = st.columns(2)
+                                                with c1:
+                                                    if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
+                                                        if buyer_sid and buyer_contact:
+                                                            for db_item in st.session_state.db['items']:
+                                                                if db_item['id'] == item['id']:
+                                                                    db_item['status'] = 'reserved'
+                                                                    db_item['buyer_sid'] = buyer_sid
+                                                                    db_item['buyer_contact'] = buyer_contact
+                                                                    db_item['buyer_id'] = current_user_id # 🚨 채팅을 위해 현재 유저의 ID를 기록
+                                                                    
+                                                                    # 채팅방 생성
+                                                                    if 'chats' not in st.session_state.db:
+                                                                        st.session_state.db['chats'] = {}
+                                                                    if str(item['id']) not in st.session_state.db['chats']:
+                                                                        st.session_state.db['chats'][str(item['id'])] = []
+                                                                    break
+                                                            save_data(st.session_state.db)
+                                                            st.session_state.reserving_item_id = None
+                                                            st.rerun()
+                                                        else:
+                                                            st.warning("정보를 입력하세요.")
+                                                with c2:
+                                                    if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
+                                                        st.session_state.reserving_item_id = None
+                                                        st.rerun()
+                                    else:
+                                        if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
+                                            st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
+                                            save_data(st.session_state.db)
+                                            st.rerun()
+                                
+                                with st.expander("상세 보기"):
+                                    st.write(f"📍 위치: {item.get('location', '')}")
+                                    st.write(f"**설명:** {item.get('desc', '')}")
+                                    st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
+                                    st.write(f"**연락처:** {item.get('contact', '')}")
