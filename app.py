@@ -57,7 +57,6 @@ DORMS = ["안드레아관", "스테파노관"]
 DATA_FILE = "data.json"
 
 def load_data():
-    # chats 키 포함
     data = {"users": {}, "items": [], "sessions": {}, "chats": {}}
     if os.path.exists(DATA_FILE):
         try:
@@ -192,14 +191,12 @@ else:
     
     # --- 사이드바: 1:1 채팅방 목록 ---
     st.sidebar.markdown("### 💬 1:1 채팅방")
-    # 내가 올렸거나, 내가 수령하기로 한 물건 중 예약/완료 상태인 것 필터링
     my_chat_items = [i for i in st.session_state.db['items'] 
                      if i.get('status') in ['reserved', 'completed'] 
                      and (i.get('uploader_id') == current_user_id or i.get('buyer_id') == current_user_id)]
     
     if my_chat_items:
         for chat_item in my_chat_items:
-            # 채팅 상대방 이름 표기
             other_person = chat_item['buyer_id'] if chat_item['uploader_id'] == current_user_id else chat_item['uploader_id']
             btn_label = f"📦 {chat_item['title'][:8]}.. ({other_person})"
             
@@ -259,10 +256,9 @@ else:
                 
             st.divider()
             
-            # 🔥 채팅창 부분만 2초마다 자동 새로고침(Polling)
+            # 채팅창 2초마다 자동 새로고침(Polling)
             @st.fragment(run_every=2)
             def auto_refresh_chat(chat_id, user_id):
-                # 파일에서 최신 데이터를 다시 불러옴
                 fresh_db = load_data() 
                 chat_history = fresh_db.get('chats', {}).get(chat_id, [])
                 
@@ -277,12 +273,9 @@ else:
                             st.write(msg['message'])
                             st.caption(msg['timestamp'])
             
-            # 함수 실행하여 채팅창 렌더링
             auto_refresh_chat(chat_id_str, current_user_id)
 
-            # 메시지 입력 (새로고침 구역 밖)
             if new_msg := st.chat_input("메시지를 입력하세요..."):
-                # 내가 보내는 시점의 최신 DB 동기화
                 st.session_state.db = load_data()
                 
                 if 'chats' not in st.session_state.db:
@@ -329,7 +322,17 @@ else:
                         item_location = st.text_input("위치", placeholder="예: 1층 로비")
                     with c2:
                         item_nickname = st.text_input("닉네임", placeholder="예: 302호 민지")
-                        item_contact = st.text_input("연락 방법", placeholder="오픈채팅 링크 등")
+                        
+                        # 🔥 수정된 부분: 거래 희망 시간 스크롤 선택창 도입
+                        st.markdown("<p style='font-size: 14px; margin-bottom: 0px;'>거래 희망 시간</p>", unsafe_allow_html=True)
+                        t_col1, t_col2 = st.columns(2)
+                        with t_col1:
+                            # 01~24시 선택
+                            item_hour = st.selectbox("시", [f"{i:02d}시" for i in range(1, 25)], label_visibility="collapsed")
+                        with t_col2:
+                            # 00~59분 선택
+                            item_minute = st.selectbox("분", [f"{i:02d}분" for i in range(0, 60)], label_visibility="collapsed")
+                            
                         item_image = st.file_uploader("사진", type=['png', 'jpg', 'jpeg'])
                     item_desc = st.text_area("상태·설명")
                     
@@ -340,6 +343,9 @@ else:
                             image_data = base64.b64encode(item_image.read()).decode() if item_image else None
                             new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
                             
+                            # 시와 분을 조합하여 contact 에 저장
+                            final_time = f"{item_hour} {item_minute}"
+                            
                             new_item = {
                                 "id": new_id,
                                 "uploader_id": current_user_id,
@@ -347,7 +353,7 @@ else:
                                 "category": item_category,
                                 "desc": item_desc,
                                 "location": item_location,
-                                "contact": item_contact,
+                                "contact": final_time, # 저장 시 시간 데이터로 들어감
                                 "nickname": item_nickname,
                                 "dorm": current_user_dorm,
                                 "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -418,9 +424,8 @@ else:
                                                                     db_item['status'] = 'reserved'
                                                                     db_item['buyer_sid'] = buyer_sid
                                                                     db_item['buyer_contact'] = buyer_contact
-                                                                    db_item['buyer_id'] = current_user_id # 구매자 ID 기록
+                                                                    db_item['buyer_id'] = current_user_id 
                                                                     
-                                                                    # 채팅방 생성 로직
                                                                     if 'chats' not in st.session_state.db:
                                                                         st.session_state.db['chats'] = {}
                                                                     if str(item['id']) not in st.session_state.db['chats']:
@@ -445,4 +450,5 @@ else:
                                     st.write(f"📍 위치: {item.get('location', '')}")
                                     st.write(f"**설명:** {item.get('desc', '')}")
                                     st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
-                                    st.write(f"**연락처:** {item.get('contact', '')}")
+                                    # 🔥 출력 화면도 '거래 희망 시간'으로 변경
+                                    st.write(f"**거래 희망 시간:** {item.get('contact', '')}")
