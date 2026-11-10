@@ -198,7 +198,16 @@ else:
     if my_chat_items:
         for chat_item in my_chat_items:
             other_person = chat_item['buyer_id'] if chat_item['uploader_id'] == current_user_id else chat_item['uploader_id']
-            btn_label = f"📦 {chat_item['title'][:8]}.. ({other_person})"
+            chat_id_str = str(chat_item['id'])
+            
+            # 새 메시지 알림 로직
+            chat_history = st.session_state.db.get('chats', {}).get(chat_id_str, [])
+            has_new_msg = False
+            if chat_history and chat_history[-1]['sender'] != current_user_id:
+                has_new_msg = True
+                
+            notification_badge = " 🔴" if has_new_msg else ""
+            btn_label = f"📦 {chat_item['title'][:8]}.. ({other_person}){notification_badge}"
             
             if st.sidebar.button(btn_label, key=f"chat_btn_{chat_item['id']}", use_container_width=True):
                 st.session_state.active_chat_id = chat_item['id']
@@ -218,7 +227,6 @@ else:
             with st.sidebar.container(border=True):
                 st.write(f"**{my_item['title']}** 예약 요청!")
                 st.caption(f"학번: {my_item['buyer_sid']}")
-                st.caption(f"연락처: {my_item['buyer_contact']}")
                 if st.button("✅ 수락 (수령 완료처리)", key=f"accept_{my_item['id']}", use_container_width=True):
                     for db_item in st.session_state.db['items']:
                         if db_item['id'] == my_item['id']:
@@ -323,7 +331,6 @@ else:
                     with c2:
                         item_nickname = st.text_input("닉네임", placeholder="예: 302호 민지")
                         
-                        # 🔥 수정된 부분: 거래 희망 일시 선택 (월, 일, 시, 분 4단계 스크롤)
                         st.markdown("<p style='font-size: 14px; margin-bottom: 0px;'>거래 희망 일시</p>", unsafe_allow_html=True)
                         t_col1, t_col2, t_col3, t_col4 = st.columns(4)
                         with t_col1:
@@ -345,7 +352,6 @@ else:
                             image_data = base64.b64encode(item_image.read()).decode() if item_image else None
                             new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
                             
-                            # 월, 일, 시, 분 결합
                             final_time = f"{item_month} {item_day} {item_hour} {item_minute}"
                             
                             new_item = {
@@ -355,7 +361,7 @@ else:
                                 "category": item_category,
                                 "desc": item_desc,
                                 "location": item_location,
-                                "contact": final_time, # 월/일/시/분 데이터로 저장
+                                "contact": final_time, 
                                 "nickname": item_nickname,
                                 "dorm": current_user_dorm,
                                 "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -415,17 +421,16 @@ else:
                                         if st.session_state.reserving_item_id == item['id']:
                                             with st.container(border=True):
                                                 buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
-                                                buyer_contact = st.text_input("연락처", key=f"contact_{item['id']}")
                                                 
                                                 c1, c2 = st.columns(2)
                                                 with c1:
                                                     if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
-                                                        if buyer_sid and buyer_contact:
+                                                        if buyer_sid:
                                                             for db_item in st.session_state.db['items']:
                                                                 if db_item['id'] == item['id']:
                                                                     db_item['status'] = 'reserved'
                                                                     db_item['buyer_sid'] = buyer_sid
-                                                                    db_item['buyer_contact'] = buyer_contact
+                                                                    db_item['buyer_contact'] = "" 
                                                                     db_item['buyer_id'] = current_user_id 
                                                                     
                                                                     if 'chats' not in st.session_state.db:
@@ -437,7 +442,7 @@ else:
                                                             st.session_state.reserving_item_id = None
                                                             st.rerun()
                                                         else:
-                                                            st.warning("정보를 입력하세요.")
+                                                            st.warning("학번을 입력하세요.")
                                                 with c2:
                                                     if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
                                                         st.session_state.reserving_item_id = None
