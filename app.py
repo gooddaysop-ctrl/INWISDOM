@@ -8,16 +8,14 @@ import uuid
 # --- 페이지 설정 ---
 st.set_page_config(page_title="가톨릭대학교 기숙사 나눔장터", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS 스타일 적용 (상단바 고정 완벽 적용) ---
+# --- CSS 스타일 적용 ---
 st.markdown("""
     <style>
-    /* 불필요한 기본 메뉴 숨김 */
     .stDeployButton { display: none !important; }
     #MainMenu { display: none !important; }
-    
     .stApp { background-color: #F9FAFB; }
     
-    /* 🔥 상단바 고정 (Sticky) - 레이아웃 깨짐 방지 🔥 */
+    /* 상단바 고정 (Sticky) */
     div[data-testid="stVerticalBlock"]:has(#sticky-header) {
         position: sticky;
         top: 2.875rem;
@@ -30,7 +28,7 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* 사이드바 내부 버튼 검은색 적용 */
+    /* 사이드바 내부 버튼 */
     [data-testid="stSidebar"] button {
         background-color: #000000 !important;
         color: #ffffff !important;
@@ -50,7 +48,6 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         border: 1px solid #F3F4F6;
     }
-    
     .logo-container:hover { opacity: 0.7; }
     </style>
 """, unsafe_allow_html=True)
@@ -60,7 +57,8 @@ DORMS = ["안드레아관", "스테파노관"]
 DATA_FILE = "data.json"
 
 def load_data():
-    data = {"users": {}, "items": [], "sessions": {}}
+    # chats 키 추가
+    data = {"users": {}, "items": [], "sessions": {}, "chats": {}}
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -74,6 +72,7 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+# 초기 세션 설정
 if 'db' not in st.session_state:
     st.session_state.db = load_data()
 if 'logged_in_user' not in st.session_state:
@@ -82,6 +81,8 @@ if 'show_add_form' not in st.session_state:
     st.session_state.show_add_form = False
 if 'reserving_item_id' not in st.session_state:
     st.session_state.reserving_item_id = None
+if 'active_chat_id' not in st.session_state:
+    st.session_state.active_chat_id = None
 
 now = datetime.datetime.now()
 valid_sessions = {}
@@ -182,151 +183,34 @@ else:
         with header_col3:
             if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
                 st.session_state.show_add_form = not st.session_state.show_add_form
-
-    # --- 가톨릭대 배경 사진 ---
-    image_path = "image_0f5c52.jpg"
-    if os.path.exists(image_path):
-        with open(image_path, "rb") as f:
-            img_base64 = base64.b64encode(f.read()).decode()
-        st.markdown(f"""
-            <div style="
-                width: 100%; height: 350px; 
-                background-image: url('data:image/jpeg;base64,{img_base64}'); 
-                background-size: cover; background-position: center; 
-                -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
-                mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
-                margin-bottom: 20px;
-                border-radius: 12px;
-            "></div>
-        """, unsafe_allow_html=True)
-
-    # --- 물품 등록 폼 ---
-    if st.session_state.show_add_form:
-        with st.container(border=True):
-            st.subheader("새 나눔 물품 등록")
-            with st.form("add_item_form"):
-                c1, c2 = st.columns(2)
-                with c1:
-                    item_name = st.text_input("물건 이름", placeholder="예: 미니 선풍기")
-                    item_category = st.selectbox("분류", CATEGORIES)
-                    item_location = st.text_input("위치", placeholder="예: 1층 로비")
-                with c2:
-                    item_nickname = st.text_input("닉네임", placeholder="예: 302호 민지")
-                    item_contact = st.text_input("연락 방법", placeholder="오픈채팅 링크 등")
-                    item_image = st.file_uploader("사진", type=['png', 'jpg', 'jpeg'])
-                item_desc = st.text_area("상태·설명")
-                
-                if st.form_submit_button("등록하기", type="primary", use_container_width=True):
-                    if not item_name or not item_location or not item_nickname:
-                        st.warning("물건 이름, 위치, 닉네임은 필수입니다.")
-                    else:
-                        image_data = base64.b64encode(item_image.read()).decode() if item_image else None
-                        new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
-                        
-                        new_item = {
-                            "id": new_id,
-                            "uploader_id": current_user_id,
-                            "title": item_name,
-                            "category": item_category,
-                            "desc": item_desc,
-                            "location": item_location,
-                            "contact": item_contact,
-                            "nickname": item_nickname,
-                            "dorm": current_user_dorm,
-                            "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                            "image_data": image_data,
-                            "status": "available",
-                            "buyer_sid": "",
-                            "buyer_contact": ""
-                        }
-                        st.session_state.db['items'].insert(0, new_item)
-                        save_data(st.session_state.db)
-                        st.session_state.show_add_form = False
-                        st.rerun()
-
-    # --- 물품 리스트 ---
-    display_items = [i for i in st.session_state.db['items'] if isinstance(i, dict) and i.get('dorm') == current_user_dorm]
-    if search_query:
-        display_items = [i for i in display_items if search_query.lower() in i.get('title', '').lower() or search_query.lower() in i.get('desc', '').lower()]
-
-    st.markdown("#### 🎁 실시간 나눔 목록")
-    if not display_items:
-        st.write("아직 올라온 물품이 없습니다. 상단의 '➕ 물품 나눔하기'를 눌러 첫 게시글을 올려보세요!")
-    else:
-        for i in range(0, len(display_items), 4):
-            cols = st.columns(4)
-            for j in range(4):
-                if i + j < len(display_items):
-                    item = display_items[i+j]
-                    with cols[j]:
-                        with st.container(border=True):
-                            status = item.get('status', 'available')
-                            overlay_html = ""
-                            opacity = "1.0"
-                            
-                            if status == 'reserved':
-                                opacity = "0.3"
-                                overlay_html = '<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; text-align:center; text-shadow:0px 2px 4px rgba(0,0,0,0.8);"><div style="font-size:36px;">🕒</div><div style="font-size:16px; font-weight:bold;">예약중</div></div>'
-                            elif status == 'completed':
-                                opacity = "0.3"
-                                overlay_html = '<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; text-align:center; text-shadow:0px 2px 4px rgba(0,0,0,0.8);"><div style="font-size:36px;">✅</div><div style="font-size:16px; font-weight:bold;">수령 완료</div></div>'
-
-                            img_bg = f"data:image/jpeg;base64,{item['image_data']}" if item.get('image_data') else ""
-                            if img_bg:
-                                st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:black; border-radius:8px; overflow:hidden;"><img src="{img_bg}" style="width:100%; height:100%; object-fit:cover; opacity:{opacity};">{overlay_html}</div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown(f'<div style="position:relative; width:100%; height:150px; background-color:#374151; border-radius:8px; overflow:hidden; display:flex; justify-content:center; align-items:center; color:#9CA3AF;"><div style="opacity:{opacity};">이미지 없음</div>{overlay_html}</div>', unsafe_allow_html=True)
-                            
-                            st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
-                            st.caption(f"{item.get('category')} | {item.get('date')}")
-                            
-                            if status == 'available':
-                                if item.get('uploader_id') != current_user_id:
-                                    if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
-                                        st.session_state.reserving_item_id = item['id']
-                                        st.rerun()
-                                    
-                                    if st.session_state.reserving_item_id == item['id']:
-                                        with st.container(border=True):
-                                            buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
-                                            buyer_contact = st.text_input("연락처", key=f"contact_{item['id']}")
-                                            
-                                            c1, c2 = st.columns(2)
-                                            with c1:
-                                                if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
-                                                    if buyer_sid and buyer_contact:
-                                                        for db_item in st.session_state.db['items']:
-                                                            if db_item['id'] == item['id']:
-                                                                db_item['status'] = 'reserved'
-                                                                db_item['buyer_sid'] = buyer_sid
-                                                                db_item['buyer_contact'] = buyer_contact
-                                                                break
-                                                        save_data(st.session_state.db)
-                                                        st.session_state.reserving_item_id = None
-                                                        st.rerun()
-                                                    else:
-                                                        st.warning("정보를 입력하세요.")
-                                            with c2:
-                                                if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
-                                                    st.session_state.reserving_item_id = None
-                                                    st.rerun()
-                                else:
-                                    if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
-                                        st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
-                                        save_data(st.session_state.db)
-                                        st.rerun()
-                            
-                            with st.expander("상세 보기"):
-                                st.write(f"📍 위치: {item.get('location', '')}")
-                                st.write(f"**설명:** {item.get('desc', '')}")
-                                st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
-                                st.write(f"**연락처:** {item.get('contact', '')}")
+                st.session_state.active_chat_id = None # 나눔 폼 열 때 채팅창 닫기
 
     # --- 사이드바 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
     st.sidebar.markdown(f"🏠 소속: {current_user_dorm}")
     st.sidebar.divider()
     
+    # --- 사이드바: 1:1 채팅방 목록 ---
+    st.sidebar.markdown("### 💬 1:1 채팅방")
+    # 내가 올렸거나, 내가 수령하기로 한 물건 중 예약/완료 상태인 것
+    my_chat_items = [i for i in st.session_state.db['items'] 
+                     if i.get('status') in ['reserved', 'completed'] 
+                     and (i.get('uploader_id') == current_user_id or i.get('buyer_id') == current_user_id)]
+    
+    if my_chat_items:
+        for chat_item in my_chat_items:
+            # 채팅 상대방 이름 결정
+            other_person = chat_item['buyer_id'] if chat_item['uploader_id'] == current_user_id else chat_item['uploader_id']
+            btn_label = f"📦 {chat_item['title'][:8]}.. ({other_person})"
+            
+            if st.sidebar.button(btn_label, key=f"chat_btn_{chat_item['id']}", use_container_width=True):
+                st.session_state.active_chat_id = chat_item['id']
+                st.session_state.show_add_form = False
+                st.rerun()
+    else:
+        st.sidebar.caption("현재 참여 중인 채팅방이 없습니다.")
+
+    st.sidebar.divider()
     st.sidebar.markdown("### 🔔 내 물품 알림")
     my_items = [i for i in st.session_state.db['items'] if i.get('uploader_id') == current_user_id]
     has_notification = False
@@ -359,3 +243,87 @@ else:
                 save_data(st.session_state.db)
             del st.query_params['session']
         st.rerun()
+
+    # --- 메인 화면 렌더링 분기점 ---
+    # 채팅방이 선택되었을 경우 채팅방 렌더링
+    if st.session_state.active_chat_id is not None:
+        chat_id_str = str(st.session_state.active_chat_id)
+        current_chat_item = next((i for i in st.session_state.db['items'] if i['id'] == st.session_state.active_chat_id), None)
+        
+        if current_chat_item:
+            st.markdown(f"### 💬 [{current_chat_item['title']}] 1:1 채팅방")
+            if st.button("⬅️ 메인으로 돌아가기"):
+                st.session_state.active_chat_id = None
+                st.rerun()
+                
+            st.divider()
+            
+            # 채팅 기록 불러오기 및 렌더링
+            if 'chats' not in st.session_state.db:
+                st.session_state.db['chats'] = {}
+            chat_history = st.session_state.db['chats'].get(chat_id_str, [])
+            
+            chat_container = st.container(height=400)
+            with chat_container:
+                if not chat_history:
+                    st.caption("아직 메시지가 없습니다. 인사를 건네보세요!")
+                for msg in chat_history:
+                    is_me = (msg['sender'] == current_user_id)
+                    with st.chat_message("user" if is_me else "assistant"):
+                        st.markdown(f"**{msg['sender']}**")
+                        st.write(msg['message'])
+                        st.caption(msg['timestamp'])
+
+            # 메시지 입력
+            if new_msg := st.chat_input("메시지를 입력하세요..."):
+                if chat_id_str not in st.session_state.db['chats']:
+                    st.session_state.db['chats'][chat_id_str] = []
+                    
+                st.session_state.db['chats'][chat_id_str].append({
+                    "sender": current_user_id,
+                    "message": new_msg,
+                    "timestamp": datetime.datetime.now().strftime("%H:%M")
+                })
+                save_data(st.session_state.db)
+                st.rerun()
+
+    # 채팅방이 아닐 경우 기존 장터 화면 렌더링
+    else:
+        # 가톨릭대 배경 사진
+        image_path = "image_0f5c52.jpg"
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as f:
+                img_base64 = base64.b64encode(f.read()).decode()
+            st.markdown(f"""
+                <div style="
+                    width: 100%; height: 350px; 
+                    background-image: url('data:image/jpeg;base64,{img_base64}'); 
+                    background-size: cover; background-position: center; 
+                    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+                    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%);
+                    margin-bottom: 20px;
+                    border-radius: 12px;
+                "></div>
+            """, unsafe_allow_html=True)
+
+        # 물품 등록 폼
+        if st.session_state.show_add_form:
+            with st.container(border=True):
+                st.subheader("새 나눔 물품 등록")
+                with st.form("add_item_form"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        item_name = st.text_input("물건 이름", placeholder="예: 미니 선풍기")
+                        item_category = st.selectbox("분류", CATEGORIES)
+                        item_location = st.text_input("위치", placeholder="예: 1층 로비")
+                    with c2:
+                        item_nickname = st.text_input("닉네임", placeholder="예: 302호 민지")
+                        item_contact = st.text_input("연락 방법", placeholder="오픈채팅 링크 등")
+                        item_image = st.file_uploader("사진", type=['png', 'jpg', 'jpeg'])
+                    item_desc = st.text_area("상태·설명")
+                    
+                    if st.form_submit_button("등록하기", type="primary", use_container_width=True):
+                        if not item_name or not item_location or not item_nickname:
+                            st.warning("물건 이름, 위치, 닉네임은 필수입니다.")
+                        else:
+                            image_data = base64.b64encode(item_image.read
