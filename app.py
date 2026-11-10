@@ -57,7 +57,7 @@ DORMS = ["안드레아관", "스테파노관"]
 DATA_FILE = "data.json"
 
 def load_data():
-    # chats 키 추가
+    # chats 키 포함
     data = {"users": {}, "items": [], "sessions": {}, "chats": {}}
     if os.path.exists(DATA_FILE):
         try:
@@ -147,7 +147,7 @@ else:
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
-    # --- 🔥 상단바 고정 영역 ---
+    # --- 상단바 고정 영역 ---
     header_container = st.container()
     with header_container:
         st.markdown("<div id='sticky-header'></div>", unsafe_allow_html=True)
@@ -183,7 +183,7 @@ else:
         with header_col3:
             if st.button("➕ 물품 나눔하기", type="primary", use_container_width=True):
                 st.session_state.show_add_form = not st.session_state.show_add_form
-                st.session_state.active_chat_id = None # 나눔 폼 열 때 채팅창 닫기
+                st.session_state.active_chat_id = None 
 
     # --- 사이드바 ---
     st.sidebar.markdown(f"**👤 {current_user_id}**님 환영합니다.")
@@ -192,14 +192,14 @@ else:
     
     # --- 사이드바: 1:1 채팅방 목록 ---
     st.sidebar.markdown("### 💬 1:1 채팅방")
-    # 내가 올렸거나, 내가 수령하기로 한 물건 중 예약/완료 상태인 것
+    # 내가 올렸거나, 내가 수령하기로 한 물건 중 예약/완료 상태인 것 필터링
     my_chat_items = [i for i in st.session_state.db['items'] 
                      if i.get('status') in ['reserved', 'completed'] 
                      and (i.get('uploader_id') == current_user_id or i.get('buyer_id') == current_user_id)]
     
     if my_chat_items:
         for chat_item in my_chat_items:
-            # 채팅 상대방 이름 결정
+            # 채팅 상대방 이름 표기
             other_person = chat_item['buyer_id'] if chat_item['uploader_id'] == current_user_id else chat_item['uploader_id']
             btn_label = f"📦 {chat_item['title'][:8]}.. ({other_person})"
             
@@ -245,7 +245,8 @@ else:
         st.rerun()
 
     # --- 메인 화면 렌더링 분기점 ---
-    # 채팅방이 선택되었을 경우 채팅방 렌더링
+    
+    # 1️⃣ 채팅방 렌더링
     if st.session_state.active_chat_id is not None:
         chat_id_str = str(st.session_state.active_chat_id)
         current_chat_item = next((i for i in st.session_state.db['items'] if i['id'] == st.session_state.active_chat_id), None)
@@ -258,24 +259,34 @@ else:
                 
             st.divider()
             
-            # 채팅 기록 불러오기 및 렌더링
-            if 'chats' not in st.session_state.db:
-                st.session_state.db['chats'] = {}
-            chat_history = st.session_state.db['chats'].get(chat_id_str, [])
+            # 🔥 채팅창 부분만 2초마다 자동 새로고침(Polling)
+            @st.fragment(run_every=2)
+            def auto_refresh_chat(chat_id, user_id):
+                # 파일에서 최신 데이터를 다시 불러옴
+                fresh_db = load_data() 
+                chat_history = fresh_db.get('chats', {}).get(chat_id, [])
+                
+                chat_container = st.container(height=400)
+                with chat_container:
+                    if not chat_history:
+                        st.caption("아직 메시지가 없습니다. 인사를 건네보세요!")
+                    for msg in chat_history:
+                        is_me = (msg['sender'] == user_id)
+                        with st.chat_message("user" if is_me else "assistant"):
+                            st.markdown(f"**{msg['sender']}**")
+                            st.write(msg['message'])
+                            st.caption(msg['timestamp'])
             
-            chat_container = st.container(height=400)
-            with chat_container:
-                if not chat_history:
-                    st.caption("아직 메시지가 없습니다. 인사를 건네보세요!")
-                for msg in chat_history:
-                    is_me = (msg['sender'] == current_user_id)
-                    with st.chat_message("user" if is_me else "assistant"):
-                        st.markdown(f"**{msg['sender']}**")
-                        st.write(msg['message'])
-                        st.caption(msg['timestamp'])
+            # 함수 실행하여 채팅창 렌더링
+            auto_refresh_chat(chat_id_str, current_user_id)
 
-            # 메시지 입력
+            # 메시지 입력 (새로고침 구역 밖)
             if new_msg := st.chat_input("메시지를 입력하세요..."):
+                # 내가 보내는 시점의 최신 DB 동기화
+                st.session_state.db = load_data()
+                
+                if 'chats' not in st.session_state.db:
+                    st.session_state.db['chats'] = {}
                 if chat_id_str not in st.session_state.db['chats']:
                     st.session_state.db['chats'][chat_id_str] = []
                     
@@ -287,9 +298,9 @@ else:
                 save_data(st.session_state.db)
                 st.rerun()
 
-    # 채팅방이 아닐 경우 기존 장터 화면 렌더링
+    # 2️⃣ 장터 메인 화면 렌더링
     else:
-        # 가톨릭대 배경 사진
+        # 배경 이미지
         image_path = "image_0f5c52.jpg"
         if os.path.exists(image_path):
             with open(image_path, "rb") as f:
@@ -344,7 +355,7 @@ else:
                                 "status": "available",
                                 "buyer_sid": "",
                                 "buyer_contact": "",
-                                "buyer_id": ""  # 채팅을 위해 구매자 ID 필드 추가
+                                "buyer_id": "" 
                             }
                             st.session_state.db['items'].insert(0, new_item)
                             save_data(st.session_state.db)
@@ -407,9 +418,9 @@ else:
                                                                     db_item['status'] = 'reserved'
                                                                     db_item['buyer_sid'] = buyer_sid
                                                                     db_item['buyer_contact'] = buyer_contact
-                                                                    db_item['buyer_id'] = current_user_id # 🚨 채팅을 위해 현재 유저의 ID를 기록
+                                                                    db_item['buyer_id'] = current_user_id # 구매자 ID 기록
                                                                     
-                                                                    # 채팅방 생성
+                                                                    # 채팅방 생성 로직
                                                                     if 'chats' not in st.session_state.db:
                                                                         st.session_state.db['chats'] = {}
                                                                     if str(item['id']) not in st.session_state.db['chats']:
