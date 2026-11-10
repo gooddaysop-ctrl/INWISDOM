@@ -28,12 +28,17 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
-    /* 🔥 새 메시지 알림 팝업을 우측 상단으로 끌어올림 */
+    /* 새 메시지 알림 팝업을 우측 상단으로 이동 및 클릭 링크 스타일 */
     [data-testid="stToastContainer"] {
         top: 5rem !important;
         bottom: auto !important;
         right: 1.5rem !important;
         z-index: 99999 !important;
+    }
+    [data-testid="stToast"] a {
+        color: #2563EB !important;
+        font-weight: bold;
+        text-decoration: underline;
     }
     
     /* 사이드바 내부 버튼 */
@@ -151,6 +156,16 @@ if st.session_state.logged_in_user is None:
 
 # --- 메인 화면 ---
 else:
+    # 팝업 알림 링크 클릭 시 바로 해당 채팅방으로 이동시키는 파라미터 감지
+    if 'active_chat' in st.query_params:
+        try:
+            chat_target_id = int(st.query_params['active_chat'])
+            st.session_state.active_chat_id = chat_target_id
+            st.session_state.show_add_form = False
+            del st.query_params['active_chat']
+        except:
+            pass
+
     current_user_id = st.session_state.logged_in_user
     current_user_dorm = st.session_state.db['users'][current_user_id]['dorm']
 
@@ -256,7 +271,7 @@ else:
             del st.query_params['session']
         st.rerun()
 
-    # 🔥 백그라운드 새 메시지 감지 팝업 기능 (3초마다 확인)
+    # 백그라운드 새 메시지 감지 및 클릭 이동 가능한 알림 팝업
     @st.fragment(run_every=3)
     def global_notification_worker(user_id):
         fresh_db = load_data()
@@ -272,29 +287,25 @@ else:
             msgs = fresh_db.get('chats', {}).get(cid, [])
             curr_len = len(msgs)
             
-            # 최초 로드되는 방이면 개수만 저장하고 패스
             if cid not in st.session_state.last_msg_count:
                 st.session_state.last_msg_count[cid] = curr_len
                 continue
                 
             prev_len = st.session_state.last_msg_count[cid]
             
-            # 새 메시지가 늘어났다면
             if curr_len > prev_len:
                 for i in range(prev_len, curr_len):
                     msg = msgs[i]
                     if msg['sender'] != user_id:
-                        # 내가 지금 열고 있는 채팅방이 아닐 때만 상단 팝업 띄우기
                         if st.session_state.get('active_chat_id') != item['id']:
                             title_short = item['title'][:10] + "..." if len(item['title']) > 10 else item['title']
-                            # 실제 화면에 표시될 팝업 (X버튼 포함, 약 4초 뒤 사라짐)
-                            st.toast(f"📦 **{title_short}**\n\n👤 **{msg['sender']}**: {msg['message']}", icon="🔔")
+                            # 바로 가기 링크가 담긴 팝업 메시지
+                            toast_msg = f"📦 **{title_short}**\n\n👤 **{msg['sender']}**: {msg['message']}\n\n👉 [채팅방으로 이동하기](?active_chat={item['id']})"
+                            st.toast(toast_msg, icon="🔔")
                 
                 st.session_state.last_msg_count[cid] = curr_len
 
-    # 백그라운드 확인 함수 실행
     global_notification_worker(current_user_id)
-
 
     # --- 메인 화면 렌더링 분기점 ---
     
