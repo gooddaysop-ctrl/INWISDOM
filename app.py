@@ -92,6 +92,27 @@ if 'active_chat_id' not in st.session_state:
     st.session_state.active_chat_id = None
 
 now = datetime.datetime.now()
+
+# === 🔥 추가된 부분: 3일 지난 수령 완료 게시물 자동 삭제 로직 ===
+items_kept = []
+is_modified = False
+for item in st.session_state.db.get('items', []):
+    # 상태가 completed이고 완료된 날짜가 기록되어 있는 경우
+    if item.get('status') == 'completed' and 'completed_date' in item:
+        try:
+            comp_date = datetime.datetime.fromisoformat(item['completed_date'])
+            if (now - comp_date) >= datetime.timedelta(days=3):
+                is_modified = True
+                continue  # 3일 지났으므로 제외(삭제)
+        except:
+            pass
+    items_kept.append(item)
+
+if is_modified:
+    st.session_state.db['items'] = items_kept
+    save_data(st.session_state.db)
+# =========================================================
+
 valid_sessions = {}
 for token, info in st.session_state.db.get('sessions', {}).items():
     try:
@@ -238,6 +259,8 @@ else:
                     for db_item in st.session_state.db['items']:
                         if db_item['id'] == my_item['id']:
                             db_item['status'] = 'completed'
+                            # 🔥 수정된 부분: 수락 처리 시 완료 시간을 함께 저장합니다
+                            db_item['completed_date'] = datetime.datetime.now().isoformat()
                             break
                     save_data(st.session_state.db)
                     st.rerun()
@@ -459,46 +482,48 @@ else:
                                 st.markdown(f"<div style='margin-top:10px;'><b>{item.get('title', '제목 없음')}</b></div>", unsafe_allow_html=True)
                                 st.caption(f"{item.get('category')} | {item.get('date')}")
                                 
-                                if status == 'available':
-                                    if item.get('uploader_id') != current_user_id:
-                                        if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
-                                            st.session_state.reserving_item_id = item['id']
-                                            st.rerun()
-                                        
-                                        if st.session_state.reserving_item_id == item['id']:
-                                            with st.container(border=True):
-                                                buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
-                                                
-                                                c1, c2 = st.columns(2)
-                                                with c1:
-                                                    if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
-                                                        if buyer_sid:
-                                                            for db_item in st.session_state.db['items']:
-                                                                if db_item['id'] == item['id']:
-                                                                    db_item['status'] = 'reserved'
-                                                                    db_item['buyer_sid'] = buyer_sid
-                                                                    db_item['buyer_contact'] = "" 
-                                                                    db_item['buyer_id'] = current_user_id 
-                                                                    
-                                                                    if 'chats' not in st.session_state.db:
-                                                                        st.session_state.db['chats'] = {}
-                                                                    if str(item['id']) not in st.session_state.db['chats']:
-                                                                        st.session_state.db['chats'][str(item['id'])] = []
-                                                                    break
-                                                            save_data(st.session_state.db)
-                                                            st.session_state.reserving_item_id = None
-                                                            st.rerun()
-                                                        else:
-                                                            st.warning("학번을 입력하세요.")
-                                                with c2:
-                                                    if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
+                                # 🔥 수정된 부분: 수령하기 폼 조건 및 삭제 권한 로직 분리
+                                if status == 'available' and item.get('uploader_id') != current_user_id:
+                                    if st.button("✋ 수령하기", key=f"btn_{item['id']}", use_container_width=True):
+                                        st.session_state.reserving_item_id = item['id']
+                                        st.rerun()
+                                    
+                                    if st.session_state.reserving_item_id == item['id']:
+                                        with st.container(border=True):
+                                            buyer_sid = st.text_input("학번", key=f"sid_{item['id']}")
+                                            
+                                            c1, c2 = st.columns(2)
+                                            with c1:
+                                                if st.button("✔️ 완료", type="primary", key=f"conf_{item['id']}", use_container_width=True):
+                                                    if buyer_sid:
+                                                        for db_item in st.session_state.db['items']:
+                                                            if db_item['id'] == item['id']:
+                                                                db_item['status'] = 'reserved'
+                                                                db_item['buyer_sid'] = buyer_sid
+                                                                db_item['buyer_contact'] = "" 
+                                                                db_item['buyer_id'] = current_user_id 
+                                                                
+                                                                if 'chats' not in st.session_state.db:
+                                                                    st.session_state.db['chats'] = {}
+                                                                if str(item['id']) not in st.session_state.db['chats']:
+                                                                    st.session_state.db['chats'][str(item['id'])] = []
+                                                                break
+                                                        save_data(st.session_state.db)
                                                         st.session_state.reserving_item_id = None
                                                         st.rerun()
-                                    else:
-                                        if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
-                                            st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
-                                            save_data(st.session_state.db)
-                                            st.rerun()
+                                                    else:
+                                                        st.warning("학번을 입력하세요.")
+                                            with c2:
+                                                if st.button("취소", key=f"canc_{item['id']}", use_container_width=True):
+                                                    st.session_state.reserving_item_id = None
+                                                    st.rerun()
+                                
+                                # 🔥 수정된 부분: 본인이 등록한 게시물은 상태가 'available' 이거나 'completed'일 때 삭제 가능 
+                                if item.get('uploader_id') == current_user_id and status in ['available', 'completed']:
+                                    if st.button("🗑️ 삭제하기", key=f"del_{item['id']}", use_container_width=True):
+                                        st.session_state.db['items'] = [x for x in st.session_state.db['items'] if x['id'] != item['id']]
+                                        save_data(st.session_state.db)
+                                        st.rerun()
                                 
                                 with st.expander("상세 보기"):
                                     st.write(f"📍 위치: {item.get('location', '')}")
