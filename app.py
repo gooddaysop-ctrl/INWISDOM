@@ -28,6 +28,14 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     
+    /* 🔥 새 메시지 알림 팝업을 우측 상단으로 끌어올림 */
+    [data-testid="stToastContainer"] {
+        top: 5rem !important;
+        bottom: auto !important;
+        right: 1.5rem !important;
+        z-index: 99999 !important;
+    }
+    
     /* 사이드바 내부 버튼 */
     [data-testid="stSidebar"] button {
         background-color: #000000 !important;
@@ -200,7 +208,6 @@ else:
             other_person = chat_item['buyer_id'] if chat_item['uploader_id'] == current_user_id else chat_item['uploader_id']
             chat_id_str = str(chat_item['id'])
             
-            # 새 메시지 알림 로직
             chat_history = st.session_state.db.get('chats', {}).get(chat_id_str, [])
             has_new_msg = False
             if chat_history and chat_history[-1]['sender'] != current_user_id:
@@ -248,6 +255,46 @@ else:
                 save_data(st.session_state.db)
             del st.query_params['session']
         st.rerun()
+
+    # 🔥 백그라운드 새 메시지 감지 팝업 기능 (3초마다 확인)
+    @st.fragment(run_every=3)
+    def global_notification_worker(user_id):
+        fresh_db = load_data()
+        my_chats_data = [i for i in fresh_db.get('items', []) 
+                         if i.get('status') in ['reserved', 'completed'] 
+                         and (i.get('uploader_id') == user_id or i.get('buyer_id') == user_id)]
+        
+        if 'last_msg_count' not in st.session_state:
+            st.session_state.last_msg_count = {}
+            
+        for item in my_chats_data:
+            cid = str(item['id'])
+            msgs = fresh_db.get('chats', {}).get(cid, [])
+            curr_len = len(msgs)
+            
+            # 최초 로드되는 방이면 개수만 저장하고 패스
+            if cid not in st.session_state.last_msg_count:
+                st.session_state.last_msg_count[cid] = curr_len
+                continue
+                
+            prev_len = st.session_state.last_msg_count[cid]
+            
+            # 새 메시지가 늘어났다면
+            if curr_len > prev_len:
+                for i in range(prev_len, curr_len):
+                    msg = msgs[i]
+                    if msg['sender'] != user_id:
+                        # 내가 지금 열고 있는 채팅방이 아닐 때만 상단 팝업 띄우기
+                        if st.session_state.get('active_chat_id') != item['id']:
+                            title_short = item['title'][:10] + "..." if len(item['title']) > 10 else item['title']
+                            # 실제 화면에 표시될 팝업 (X버튼 포함, 약 4초 뒤 사라짐)
+                            st.toast(f"📦 **{title_short}**\n\n👤 **{msg['sender']}**: {msg['message']}", icon="🔔")
+                
+                st.session_state.last_msg_count[cid] = curr_len
+
+    # 백그라운드 확인 함수 실행
+    global_notification_worker(current_user_id)
+
 
     # --- 메인 화면 렌더링 분기점 ---
     
