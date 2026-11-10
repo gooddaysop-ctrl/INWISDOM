@@ -323,14 +323,16 @@ else:
                     with c2:
                         item_nickname = st.text_input("닉네임", placeholder="예: 302호 민지")
                         
-                        # 🔥 수정된 부분: 거래 희망 시간 스크롤 선택창 도입
-                        st.markdown("<p style='font-size: 14px; margin-bottom: 0px;'>거래 희망 시간</p>", unsafe_allow_html=True)
-                        t_col1, t_col2 = st.columns(2)
+                        # 🔥 수정된 부분: 거래 희망 일시 선택 (월, 일, 시, 분 4단계 스크롤)
+                        st.markdown("<p style='font-size: 14px; margin-bottom: 0px;'>거래 희망 일시</p>", unsafe_allow_html=True)
+                        t_col1, t_col2, t_col3, t_col4 = st.columns(4)
                         with t_col1:
-                            # 01~24시 선택
-                            item_hour = st.selectbox("시", [f"{i:02d}시" for i in range(1, 25)], label_visibility="collapsed")
+                            item_month = st.selectbox("월", [f"{i}월" for i in range(1, 13)], label_visibility="collapsed")
                         with t_col2:
-                            # 00~59분 선택
+                            item_day = st.selectbox("일", [f"{i}일" for i in range(1, 32)], label_visibility="collapsed")
+                        with t_col3:
+                            item_hour = st.selectbox("시", [f"{i:02d}시" for i in range(1, 25)], label_visibility="collapsed")
+                        with t_col4:
                             item_minute = st.selectbox("분", [f"{i:02d}분" for i in range(0, 60)], label_visibility="collapsed")
                             
                         item_image = st.file_uploader("사진", type=['png', 'jpg', 'jpeg'])
@@ -343,8 +345,8 @@ else:
                             image_data = base64.b64encode(item_image.read()).decode() if item_image else None
                             new_id = 1 if not st.session_state.db['items'] else max([i['id'] for i in st.session_state.db['items']]) + 1
                             
-                            # 시와 분을 조합하여 contact 에 저장
-                            final_time = f"{item_hour} {item_minute}"
+                            # 월, 일, 시, 분 결합
+                            final_time = f"{item_month} {item_day} {item_hour} {item_minute}"
                             
                             new_item = {
                                 "id": new_id,
@@ -353,7 +355,7 @@ else:
                                 "category": item_category,
                                 "desc": item_desc,
                                 "location": item_location,
-                                "contact": final_time, # 저장 시 시간 데이터로 들어감
+                                "contact": final_time, # 월/일/시/분 데이터로 저장
                                 "nickname": item_nickname,
                                 "dorm": current_user_dorm,
                                 "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -450,5 +452,4 @@ else:
                                     st.write(f"📍 위치: {item.get('location', '')}")
                                     st.write(f"**설명:** {item.get('desc', '')}")
                                     st.write(f"**작성자(닉네임):** {item.get('uploader_id')} ({item.get('nickname', '')})")
-                                    # 🔥 출력 화면도 '거래 희망 시간'으로 변경
-                                    st.write(f"**거래 희망 시간:** {item.get('contact', '')}")
+                                    st.write(f"**거래 희망 일시:** {item.get('contact', '')}")
